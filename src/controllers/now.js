@@ -1,8 +1,5 @@
-import mongoose from 'mongoose';
 import { getBoothData } from './booth.js';
 import { serializePlaylist, serializeUser } from '../utils/serialize.js';
-
-const { ObjectId } = mongoose.mongo;
 
 /**
  * @param {import('../Uwave.js').default} uw
@@ -34,20 +31,19 @@ function toInt(str) {
  * @param {import('../Uwave.js').default} uw
  */
 async function getOnlineUsers(uw) {
-  const { User } = uw.models;
+  const { db } = uw;
 
   const userIDs = await uw.redis.lrange('users', 0, -1);
-  /** @type {Omit<import('../models/User.js').LeanUser, 'activePlaylist' | 'exiled' | 'level'>[]} */
-  const users = await User.find({
-    _id: {
-      $in: userIDs.map((id) => new ObjectId(id)),
-    },
-  }).select({
-    activePlaylist: 0,
-    exiled: 0,
-    level: 0,
-    __v: 0,
-  }).lean();
+  if (userIDs.length === 0) {
+    return [];
+  }
+
+  const users = await db.selectFrom('users')
+    .where('id', 'in', userIDs)
+    .select(['id', 'username', 'slug', 'createdAt'])
+    .execute();
+  // TODO remove
+  users.forEach((user) => user.roles = [])
 
   return users.map(serializeUser);
 }

@@ -46,10 +46,11 @@ class PassportPlugin extends Passport {
      * @returns {Promise<string>}
      */
     function serializeUser(user) {
+      console.log('serializeUser', user);
       /** @type {string} */
       // @ts-expect-error `user` is actually an instance of the User model
       // but we can't express that
-      const userID = user.id;
+      const userID = user.id || user._id;
       return Promise.resolve(userID);
     }
     /**

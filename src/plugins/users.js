@@ -40,43 +40,47 @@ class UsersRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   async getUsers(filter, pagination = {}) {
-    const { User } = this.#uw.models;
+    const { db } = this.#uw;
 
     const {
       offset = 0,
       limit = 50,
     } = pagination;
 
-    const query = User.find()
-      .skip(offset)
-      .limit(limit);
-    let queryFilter = null;
-
-    if (filter) {
-      queryFilter = {
-        username: new RegExp(escapeStringRegExp(filter)),
-      };
-      query.where(queryFilter);
+    const query = db.selectFrom('users').selectAll();
+    if (filter != null) {
+      query.where('username', 'like', filter);
     }
 
-    const totalPromise = User.estimatedDocumentCount().exec();
+    query
+      .offset(offset)
+      .limit(limit);
+
+    const totalQuery = db.selectFrom('users')
+      .select((eb) => eb.fn.countAll().as('count'));
+
+    const filteredQuery = filter == null ? totalQuery : db.selectFrom('users')
+      .select((eb) => eb.fn.countAll().as('count'))
+      .where('username', 'like', filter);
 
     const [
       users,
       filtered,
       total,
     ] = await Promise.all([
-      query,
-      queryFilter ? User.find().where(queryFilter).countDocuments() : totalPromise,
-      totalPromise,
+      query.execute(),
+      filteredQuery.executeTakeFirstOrThrow(),
+      totalQuery.executeTakeFirstOrThrow(),
     ]);
 
+  // TODO remove
+    users.forEach((user) => user.roles = [])
     return new Page(users, {
       pageSize: limit,
-      filtered,
-      total,
+      filtered: Number(filtered.count),
+      total: Number(total.count),
       current: { offset, limit },
-      next: offset + limit <= total ? { offset: offset + limit, limit } : null,
+      next: offset + limit <= Number(total.count) ? { offset: offset + limit, limit } : null,
       previous: offset > 0
         ? { offset: Math.max(offset - limit, 0), limit }
         : null,
@@ -86,12 +90,17 @@ class UsersRepository {
   /**
    * Get a user object by ID.
    *
-   * @param {import('mongodb').ObjectId|string} id
-   * @returns {Promise<User|null>}
+   * @param {string} id
    */
   async getUser(id) {
-    const { User } = this.#uw.models;
-    const user = await User.findById(id);
+    const { db } = this.#uw;
+
+    const user = await db.selectFrom('users')
+      .where('id', '=', id)
+      .selectAll()
+      .executeTakeFirst();
+  // TODO remove
+    if (user) user.roles = [];
 
     return user;
   }
@@ -121,16 +130,15 @@ class UsersRepository {
 
   /**
    * @param {LocalLoginOptions} options
-   * @returns {Promise<User>}
    */
   async localLogin({ email, password }) {
     const { Authentication } = this.#uw.models;
 
-    /** @type {null | (Authentication & { user: User })} */
     const auth = /** @type {any} */ (await Authentication.findOne({
       email: email.toLowerCase(),
     }).populate('user').exec());
-    if (!auth || !auth.hash) {
+
+    if (!auth || !auth.user) {
       throw new UserNotFoundError({ email });
     }
 
@@ -139,7 +147,22 @@ class UsersRepository {
       throw new IncorrectPasswordError();
     }
 
-    return auth.user;
+    const user = await this.#uw.db.selectFrom('users')
+      .where('username', '=', auth.user.username)
+      .select([
+        'id',
+        'username',
+        'slug',
+        'pendingActivation',
+        'createdAt',
+        'updatedAt',
+      ])
+      .executeTakeFirst();
+    if (!user) {
+      throw new UserNotFoundError({ email });
+    }
+
+    return user;
   }
 
   /**

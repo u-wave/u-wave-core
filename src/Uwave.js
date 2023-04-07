@@ -1,9 +1,11 @@
 import EventEmitter from 'node:events';
-import { promisify } from 'node:util';
+import { promisify, inspect } from 'node:util';
+import pg from 'pg';
 import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import avvio from 'avvio';
 import { pino } from 'pino';
+import { CamelCasePlugin, Kysely, PostgresDialect, SqliteDialect } from 'kysely';
 import httpApi, { errorHandling } from './HttpApi.js';
 import SocketServer from './SocketServer.js';
 import { Source } from './Source.js';
@@ -146,7 +148,25 @@ class UwaveServer extends EventEmitter {
       ...options,
     };
 
+    /** @type {Kysely<import('./schema.js').Database>} */
+    this.db = new Kysely({
+      // dialect: new SqliteDialect({
+      //   async database() {
+      //     const { default: Database } = await import('better-sqlite3');
+      //     return new Database('test.sqlite');
+      //   },
+      // }),
+      dialect: new PostgresDialect({
+        pool: new pg.Pool({
+          user: 'uwave',
+          database: 'uwave_test',
+        }),
+      }),
+      plugins: [new CamelCasePlugin()],
+      log: ['query', 'error'],
+    });
     this.mongo = mongoose.createConnection(this.options.mongo);
+    mongoose.set('debug', true);
 
     if (typeof options.redis === 'string') {
       this.redis = new Redis(options.redis, { lazyConnect: true });
@@ -200,6 +220,11 @@ class UwaveServer extends EventEmitter {
     boot.use(booth);
 
     boot.use(errorHandling);
+
+    // boot.use(async () => {
+    //   const ids = await this.db.selectFrom('users').select('id').execute();
+    //   console.log(ids);
+    // });
   }
 
   /**

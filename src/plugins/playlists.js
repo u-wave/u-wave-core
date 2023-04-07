@@ -95,45 +95,27 @@ class PlaylistsRepository {
   }
 
   /**
-   * @param {ObjectId} id
-   * @return {Promise<Playlist>}
-   */
-  async getPlaylist(id) {
-    const { Playlist } = this.#uw.models;
-    if (id instanceof Playlist) {
-      return id;
-    }
-    const playlist = await Playlist.findById(id);
-    if (!playlist) {
-      throw new PlaylistNotFoundError({ id });
-    }
-    return playlist;
-  }
-
-  /**
-   * @param {ObjectId} id
-   * @return {Promise<Media>}
-   */
-  async getMedia(id) {
-    const { Media } = this.#uw.models;
-    if (id instanceof Media) {
-      return id;
-    }
-    const media = await Media.findById(id);
-    if (!media) {
-      throw new MediaNotFoundError({ id });
-    }
-    return media;
-  }
-
-  /**
    * @param {User} user
-   * @param {ObjectId} id
-   * @returns {Promise<Playlist>}
+   * @param {string} id
    */
   async getUserPlaylist(user, id) {
-    const { Playlist } = this.#uw.models;
-    const playlist = await Playlist.findOne({ _id: id, author: user._id });
+    const { db } = this.#uw;
+
+    console.log(db.selectFrom('playlists')
+      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
+      .where('userID', '=', user._id.toString())
+      .where('playlists.id', '=', id.toString())
+      .groupBy('playlists.id')
+      .select(['playlists.id', 'name', db.fn.countAll().as('size')])
+      .compile());
+    const playlist = await db.selectFrom('playlists')
+      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
+      .where('userID', '=', user._id.toString())
+      .where('playlists.id', '=', id.toString())
+      .groupBy('playlists.id')
+      .select(['playlists.id', 'name', db.fn.countAll().as('size')])
+      .executeTakeFirst();
+
     if (!playlist) {
       throw new PlaylistNotFoundError({ id });
     }
@@ -165,12 +147,17 @@ class PlaylistsRepository {
 
   /**
    * @param {User} user
-   * @returns {Promise<LeanPlaylist[]>}
    */
   async getUserPlaylists(user) {
-    const { Playlist } = this.#uw.models;
-    const userID = typeof user === 'object' ? user.id : user;
-    const playlists = await Playlist.where('author', userID).lean();
+    const { db } = this.#uw;
+
+    const playlists = await db.selectFrom('playlists')
+      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
+      .where('userID', '=', user.id)
+      .select(['playlists.id', 'name', db.fn.countAll().as('size'), 'playlists.createdAt'])
+      .groupBy('playlists.id')
+      .execute();
+
     return playlists;
   }
 
@@ -235,76 +222,86 @@ class PlaylistsRepository {
   }
 
   /**
-   * @param {Playlist} playlist
+   * @param {{ id: string }} playlist
    * @param {string|undefined} filter
    * @param {{ offset: number, limit: number }} pagination
-   * @returns {Promise<Page<PlaylistItem, { offset: number, limit: number }>>}
+   * @return_s {Promise<Page<PlaylistItem, { offset: number, limit: number }>>}
    */
   async getPlaylistItems(playlist, filter, pagination) {
-    const { Playlist } = this.#uw.models;
+    const { db } = this.#uw;
 
-    /** @type {PipelineStage[]} */
-    const aggregate = [
-      // find the playlist
-      { $match: { _id: playlist._id } },
-      { $limit: 1 },
-      // find the items
-      { $project: { _id: 0, media: 1 } },
-      { $unwind: '$media' },
-      {
-        $lookup: {
-          from: 'playlistitems', localField: 'media', foreignField: '_id', as: 'item',
-        },
-      },
-      // return only the items
-      { $unwind: '$item' }, // just one each
-      { $replaceRoot: { newRoot: '$item' } },
-    ];
-
-    if (filter) {
-      const rx = new RegExp(escapeStringRegExp(filter), 'i');
-      aggregate.push({
-        $match: {
-          $or: [{ artist: rx }, { title: rx }],
-        },
-      });
+    const query = db.selectFrom('playlistItems')
+      .where('playlistID', '=', playlist.id)
+      .innerJoin('media', 'playlistItems.mediaID', 'media.id')
+      .select([
+        'playlistItems.id as _id',
+        'media.id as media._id',
+        'media.sourceID as media.sourceID',
+        'media.sourceType as media.sourceType',
+        'media.sourceData as media.sourceData',
+        'media.artist as media.artist',
+        'media.title as media.title',
+        'media.duration as media.duration',
+        'media.thumbnail as media.thumbnail',
+        'playlistItems.artist',
+        'playlistItems.title',
+        'playlistItems.start',
+        'playlistItems.end',
+      ]);
+    if (filter != null) {
+      query.where('playlistItems.artist', 'like', filter)
+        .orWhere('playlistItems.title', 'like', filter);
     }
 
-    /** @type {FacetPipelineStage} */
-    const aggregateCount = [
-      { $count: 'filtered' },
-    ];
-    /** @type {FacetPipelineStage} */
-    const aggregateItems = [
-      { $skip: pagination.offset },
-      { $limit: pagination.limit },
-    ];
+    query
+      .offset(pagination.offset)
+      .limit(pagination.limit);
 
-    // look up the media items after this is all filtered down
-    aggregateItems.push(
-      {
-        $lookup: {
-          from: 'media', localField: 'media', foreignField: '_id', as: 'media',
+    const totalQuery = db.selectFrom('playlistItems')
+      .select((eb) => eb.fn.countAll().as('count'))
+      .where('playlistID', '=', playlist.id);
+
+    const filteredQuery = filter == null ? totalQuery : db.selectFrom('playlistItems')
+      .select((eb) => eb.fn.countAll().as('count'))
+      .where('playlistID', '=', playlist.id)
+      .where('playlistItems.artist', 'like', filter)
+      .orWhere('playlistItems.artist', 'like', filter);
+
+    const [
+      playlistItemsRaw,
+      filtered,
+      total,
+    ] = await Promise.all([
+      query.execute(),
+      filteredQuery.executeTakeFirstOrThrow(),
+      totalQuery.executeTakeFirstOrThrow(),
+    ]);
+
+    const playlistItems = playlistItemsRaw.map((raw) => {
+      return {
+        _id: raw._id,
+        artist: raw.artist,
+        title: raw.title,
+        start: raw.start,
+        end: raw.end,
+        media: {
+          _id: raw['media._id'],
+          artist: raw['media.artist'],
+          title: raw['media.title'],
+          duration: raw['media.duration'],
+          thumbnail: raw['media.thumbnail'],
+          sourceID: raw['media.sourceID'],
+          sourceType: raw['media.sourceType'],
+          sourceData: raw['media.sourceData'],
         },
-      },
-      { $unwind: '$media' }, // is always 1 item, is there a better way than $unwind?
-    );
-
-    aggregate.push({
-      $facet: {
-        count: aggregateCount,
-        items: aggregateItems,
-      },
-    });
-
-    const [{ count, items }] = await Playlist.aggregate(aggregate);
+      }
+    })
 
     // `items` is the same shape as a PlaylistItem instance!
-    return new Page(items, {
+    return new Page(playlistItems, {
       pageSize: pagination.limit,
-      // `count` can be the empty array if the playlist has no items
-      filtered: filter ? (count[0]?.filtered ?? 0) : playlist.media.length,
-      total: playlist.media.length,
+      filtered: Number(filtered.count),
+      total: Number(total.count),
 
       current: pagination,
       next: {

@@ -451,16 +451,14 @@ class SocketServer {
    * @private
    */
   async initLostConnections() {
-    const { User } = this.#uw.models;
-    const userIDs = await this.#uw.redis.lrange('users', 0, -1);
-    const disconnectedIDs = userIDs
-      .filter((userID) => !this.connection(userID))
-      .map((userID) => new ObjectId(userID));
+    const { db, redis } = this.#uw;
+    const userIDs = await redis.lrange('users', 0, -1);
+    const disconnectedIDs = userIDs.filter((userID) => !this.connection(userID));
 
-    /** @type {User[]} */
-    const disconnectedUsers = await User.find({
-      _id: { $in: disconnectedIDs },
-    }).exec();
+    const disconnectedUsers = await db.selectFrom('users')
+      .where('id', 'in', disconnectedIDs)
+      .selectAll()
+      .execute();
     disconnectedUsers.forEach((user) => {
       this.add(this.createLostConnection(user));
     });

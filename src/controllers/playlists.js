@@ -224,7 +224,7 @@ async function getPlaylistItems(req) {
   const filter = req.query.filter ?? undefined;
   const pagination = getOffsetPagination(req.query);
 
-  const playlist = await playlists.getUserPlaylist(user, new ObjectId(id));
+  const playlist = await playlists.getUserPlaylist(user, id);
   if (!playlist) {
     throw new PlaylistNotFoundError({ id });
   }

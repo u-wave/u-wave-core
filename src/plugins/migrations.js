@@ -72,9 +72,14 @@ async function migrationsPlugin(uw) {
   }
   uw.migrate = migrate;
 
-  await uw.migrate({
-    glob: ['*.cjs', { cwd: fileURLToPath(new URL('../migrations', import.meta.url)) }],
-  });
+  try {
+    await uw.migrate({
+      glob: ['*.cjs', { cwd: fileURLToPath(new URL('../migrations', import.meta.url)) }],
+    });
+  } catch (err) {
+    if (err.migration) err.migration.context = null;
+    throw err;
+  }
 }
 
 export default migrationsPlugin;
