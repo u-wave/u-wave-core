@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@react-email/components": "^0.0.7",
+    "@react-email/render": "^0.0.7",
     "@twurple/api": "^7.0.0",
     "@twurple/auth": "^7.0.0",
     "ajv": "^8.0.5",
@@ -44,6 +45,7 @@
     "express-session": "^1.18.1",
     "has": "^1.0.3",
     "helmet": "^8.0.0",
+    "htm": "^3.1.1",
     "htmlescape": "^1.1.1",
     "http-errors": "^2.0.0",
     "i18next": "^24.0.2",

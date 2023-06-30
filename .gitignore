@@ -35,6 +35,7 @@ package-lock.json
 .nyc_output
 
 .env
+.react-email
 
 *.sqlite
 *.sqlite-shm
