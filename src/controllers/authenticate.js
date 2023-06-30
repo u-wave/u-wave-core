@@ -7,6 +7,7 @@ import ms from 'ms';
 import htmlescape from 'htmlescape';
 import httpErrors from 'http-errors';
 import nodemailer from 'nodemailer';
+import { render } from '@react-email/render';
 import {
   BannedError,
   ReCaptchaError,
@@ -16,6 +17,7 @@ import {
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import { serializeCurrentUser } from '../utils/serialize.js';
+import PasswordResetEmail from '../emails/password-reset.js';
 
 const { BadRequest } = httpErrors;
 
@@ -29,8 +31,6 @@ const { BadRequest } = httpErrors;
  * @prop {string} [origin]
  * @prop {import('nodemailer').Transport} [mailTransport]
  * @prop {{ secret: string }} [recaptcha]
- * @prop {(options: { token: string, requestUrl: string }) =>
- *   import('nodemailer').SendMailOptions} createPasswordResetEmail
  * @prop {boolean} [cookieSecure]
  * @prop {string} [cookiePath]
  * @typedef {object} WithAuthOptions
@@ -366,7 +366,7 @@ async function register(req) {
 async function reset(req) {
   const { db, redis } = req.uwave;
   const { email } = req.body;
-  const { mailTransport, createPasswordResetEmail } = req.authOptions;
+  const { mailTransport } = req.authOptions;
 
   const user = await db.selectFrom('users')
     .where('email', '=', email)
@@ -381,21 +381,19 @@ async function reset(req) {
   await redis.set(`reset:${token}`, user.id);
   await redis.expire(`reset:${token}`, 24 * 60 * 60);
 
-  const message = createPasswordResetEmail({
+  const transport = nodemailer.createTransport(mailTransport);
+  const emailContents = PasswordResetEmail({
     token,
-    requestUrl: req.fullUrl,
+    publicUrl: new URL(req.fullUrl).origin,
   });
 
-  const transporter = nodemailer.createTransport(mailTransport ?? {
-    host: 'localhost',
-    port: 25,
-    debug: true,
-    tls: {
-      rejectUnauthorized: false,
-    },
+  await transport.sendMail({
+    to: email,
+    from: `noreply@${new URL(req.fullUrl).hostname}`,
+    subject: 'üWave Password Reset Request',
+    html: render(emailContents),
+    text: render(emailContents, { plainText: true }),
   });
-
-  await transporter.sendMail({ to: email, ...message });
 
   return toItemResponse({});
 }

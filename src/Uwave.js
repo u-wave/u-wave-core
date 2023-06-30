@@ -193,7 +193,6 @@ class UwaveServer extends EventEmitter {
       helmet: this.options.helmet,
       mailTransport: this.options.mailTransport,
       recaptcha: this.options.recaptcha,
-      createPasswordResetEmail: this.options.createPasswordResetEmail,
       onError: this.options.onError,
     });
     boot.use(SocketServer.plugin);

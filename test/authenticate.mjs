@@ -231,40 +231,11 @@ describe('Password Reset', () => {
 
     sinon.assert.calledWithMatch(sendSpy, {
       data: {
-        to: sinon.match(/@example.com$/),
+        to: 'test@example.com',
+        from: sinon.match(/noreply@/),
+        subject: 'üWave Password Reset Request',
         text: sinon.match(/http:\/\/127\.0\.0\.1:\d+\/reset\//),
-      },
-    });
-  });
-
-  it('uses a custom email body', async () => {
-    const sendSpy = sandbox.spy(mailTransport, 'send');
-    uw = await createUwave('pw_reset', {
-      mailTransport,
-      createPasswordResetEmail({ token }) {
-        assert.strictEqual(typeof token, 'string');
-        return {
-          from: 'sender@example.com',
-          subject: 'Custom Subject',
-          text: 'Text body',
-          html: '<b>HTML body</b>',
-        };
-      },
-    });
-
-    const user = await uw.test.createUser();
-
-    await supertest(uw.server)
-      .post('/api/auth/password/reset')
-      .send({ email: user.email })
-      .expect(200);
-
-    sinon.assert.calledWithMatch(sendSpy, {
-      data: {
-        from: 'sender@example.com',
-        subject: 'Custom Subject',
-        text: 'Text body',
-        html: '<b>HTML body</b>',
+        html: sinon.match(/http:\/\/127\.0\.0\.1:\d+\/reset\//),
       },
     });
   });

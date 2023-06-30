@@ -10,7 +10,9 @@ import {
 } from '@react-email/components';
 
 /**
- * @param {{ token?: string }} props
+ * @param {object} props
+ * @param {string} props.token
+ * @param {string} props.publicUrl
  */
 export default function PasswordResetEmail({
   token = '12c6c577-593a-45d5-861b-4432e4269847',
@@ -26,7 +28,7 @@ export default function PasswordResetEmail({
   return html`
     <${Html} lang="en" dir="ltr">
       <${Head}>
-        <title>Password Reset Request</title>
+        <title>üWave Password Reset Request</title>
       <//>
       <${Body} style=${bodyStyle}>
         <${Container}>
