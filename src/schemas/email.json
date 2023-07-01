@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "https://ns.u-wave.net/config/email.json#",
+  "uw:key": "u-wave:email",
+  "uw:access": "admin",
+  "type": "object",
+  "title": "Email",
+  "description": "Sending emails, for password resets etc.",
+  "properties": {
+    "resend": {
+      "type": "object",
+      "title": "Resend",
+      "description": "Send email with Resend.com",
+      "properties": {
+        "apiKey": {
+          "title": "API Key",
+          "description": "resend.com API key to use for sending emails",
+          "type": "string",
+          "nullable": true
+        },
+        "fromAddress": {
+          "title": "From address",
+          "description": "Email address to use as the sender",
+          "type": "string",
+          "format": "email"
+        },
+      },
+      "default": {}
+    }
+  }
+}

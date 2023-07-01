@@ -72,6 +72,7 @@
     "react": "^18.2.0",
     "react-email": "^1.9.4",
     "redlock": "5.0.0-beta.2",
+    "resend": "^0.16.0",
     "secure-json-parse": "^3.0.1",
     "transliteration": "^2.1.11",
     "u-wave-announce": "^0.5.1",
