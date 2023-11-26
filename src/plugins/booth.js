@@ -91,17 +91,55 @@ class Booth {
     this.#maybeStop();
   }
 
-  /**
-   * @returns {Promise<HistoryEntry | null>}
-   */
   async getCurrentEntry() {
-    const { HistoryEntry } = this.#uw.models;
+    const { db } = this.#uw;
+
     const historyID = await this.#uw.redis.get('booth:historyID');
     if (!historyID) {
       return null;
     }
 
-    return HistoryEntry.findById(historyID, '+media.sourceData');
+    const entry = await db.selectFrom('historyEntries')
+      .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .select([
+        'historyEntries.id as id',
+        'media.id as media.id',
+        'media.sourceID as media.sourceID',
+        'media.sourceType as media.sourceType',
+        'media.sourceData as media.sourceData',
+        'media.artist as media.artist',
+        'media.title as media.title',
+        'media.duration as media.duration',
+        'media.thumbnail as media.thumbnail',
+        'historyEntries.artist',
+        'historyEntries.title',
+        'historyEntries.start',
+        'historyEntries.end',
+        'historyEntries.createdAt',
+        'historyEntries.updatedAt',
+      ])
+      .where('id', '=', historyID)
+      .executeTakeFirst();
+
+    return entry ? {
+      _id: entry.id,
+      artist: entry.artist,
+      title: entry.title,
+      start: entry.start,
+      end: entry.end,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      media: {
+        _id: entry['media.id'],
+        artist: entry['media.artist'],
+        title: entry['media.title'],
+        duration: entry['media.duration'],
+        thumbnail: entry['media.thumbnail'],
+        sourceID: entry['media.sourceID'],
+        sourceType: entry['media.sourceType'],
+        sourceData: JSON.parse(entry['media.sourceData'] ?? '{}'),
+      },
+    } : null;
   }
 
   /**
@@ -138,12 +176,8 @@ class Booth {
     return entry.save();
   }
 
-  /**
-   * @param {{ remove?: boolean }} options
-   * @returns {Promise<User|null>}
-   */
+  /** @param {{ remove?: boolean }} options */
   async #getNextDJ(options) {
-    const { User } = this.#uw.models;
     /** @type {string|null} */
     let userID = await this.#uw.redis.lindex('waitlist', 0);
     if (!userID && !options.remove) {
@@ -154,7 +188,7 @@ class Booth {
       return null;
     }
 
-    return User.findById(userID);
+    return this.#uw.users.getUser(userID);
   }
 
   /**
@@ -166,10 +200,10 @@ class Booth {
     const { playlists } = this.#uw;
 
     const user = await this.#getNextDJ(options);
-    if (!user || !user.activePlaylist) {
+    if (!user || !user.activePlaylistID) {
       return null;
     }
-    const playlist = await playlists.getUserPlaylist(user, user.activePlaylist);
+    const playlist = await playlists.getUserPlaylist(user, user.activePlaylistID);
     if (playlist.size === 0) {
       throw new EmptyPlaylistError();
     }

@@ -1,10 +1,11 @@
-import { Generated } from 'kysely';
+import type { Generated } from 'kysely';
+import type { JsonObject } from 'type-fest';
 
-export interface Media {
+export interface MediaTable {
   id: Generated<string>,
   sourceID: string,
   sourceType: string,
-  sourceData: string | null,
+  sourceData: JsonObject | null,
   artist: string,
   title: string,
   duration: number,
@@ -55,7 +56,7 @@ export interface HistoryEntryTable {
 }
 
 export interface Database {
-  media: Media,
+  media: MediaTable,
   users: UserTable,
   playlists: PlaylistTable,
   playlistItems: PlaylistItemTable,

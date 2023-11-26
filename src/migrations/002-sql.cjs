@@ -13,7 +13,7 @@ async function up({ context: uw }) {
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('source_type', 'text', (col) => col.notNull())
     .addColumn('source_id', 'text', (col) => col.notNull())
-    .addColumn('source_data', 'text', (col) => col.notNull())
+    .addColumn('source_data', 'jsonb', (col) => col.notNull())
     .addColumn('artist', 'text', (col) => col.notNull())
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('duration', 'integer', (col) => col.notNull())
@@ -55,6 +55,7 @@ async function up({ context: uw }) {
 
   await db.schema.createTable('history_entries')
     .addColumn('id', 'uuid', (col) => col.primaryKey())
+    .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
     .addColumn('media_id', 'uuid', (col) => col.notNull().references('media.id'))
     .addColumn('artist', 'text', (col) => col.notNull())
     .addColumn('title', 'text', (col) => col.notNull())

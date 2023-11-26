@@ -8,7 +8,6 @@
  * @param {Playlist | LeanPlaylist} model
  */
 export function serializePlaylist(model) {
-  console.log(model)
   return {
     _id: 'id' in model ? model.id : model._id.toString(),
     name: model.name,
@@ -30,8 +29,8 @@ export function serializeUser(model) {
     slug: model.slug,
     roles: model.roles,
     avatar: model.avatar,
-    // createdAt: model.createdAt.toISOString(),
-    // updatedAt: model.updatedAt.toISOString(),
-    // lastSeenAt: model.lastSeenAt.toISOString(),
+    createdAt: model.createdAt.toISOString(),
+    updatedAt: model.updatedAt?.toISOString(),
+    lastSeenAt: model.lastSeenAt?.toISOString(),
   };
 }

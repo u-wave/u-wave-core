@@ -1,5 +1,4 @@
 import lodash from 'lodash';
-import escapeStringRegExp from 'escape-string-regexp';
 import {
   PlaylistNotFoundError,
   PlaylistItemNotFoundError,
@@ -9,6 +8,7 @@ import {
 } from '../errors/index.js';
 import Page from '../Page.js';
 import routes from '../routes/playlists.js';
+import { randomUUID } from 'node:crypto';
 
 const { groupBy, shuffle } = lodash;
 
@@ -16,7 +16,7 @@ const { groupBy, shuffle } = lodash;
  * @typedef {import('mongoose').PipelineStage} PipelineStage
  * @typedef {import('mongoose').PipelineStage.Facet['$facet'][string]} FacetPipelineStage
  * @typedef {import('mongodb').ObjectId} ObjectId
- * @typedef {import('../models/index.js').User} User
+ * @typedef {Awaited<ReturnType< import('./users.js').UsersRepository['getUser'] >> & {}} User
  * @typedef {import('../models/index.js').Playlist} Playlist
  * @typedef {import('../models/Playlist.js').LeanPlaylist} LeanPlaylist
  * @typedef {import('../models/index.js').PlaylistItem} PlaylistItem
@@ -101,45 +101,52 @@ class PlaylistsRepository {
   async getUserPlaylist(user, id) {
     const { db } = this.#uw;
 
-    console.log(db.selectFrom('playlists')
-      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
-      .where('userID', '=', user._id.toString())
-      .where('playlists.id', '=', id.toString())
-      .groupBy('playlists.id')
-      .select(['playlists.id', 'name', db.fn.countAll().as('size')])
-      .compile());
     const playlist = await db.selectFrom('playlists')
       .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
-      .where('userID', '=', user._id.toString())
-      .where('playlists.id', '=', id.toString())
+      .where('userID', '=', user.id)
+      .where('playlists.id', '=', id)
       .groupBy('playlists.id')
-      .select(['playlists.id', 'name', db.fn.countAll().as('size')])
+      .select([
+        'playlists.id',
+        'name',
+        db.fn.countAll().as('size'),
+        'playlists.createdAt',
+      ])
       .executeTakeFirst();
 
     if (!playlist) {
       throw new PlaylistNotFoundError({ id });
     }
-    return playlist;
+    return {
+      ...playlist,
+      size: Number(playlist.size),
+    };
   }
 
   /**
    * @param {User} user
    * @param {{ name: string }} options
-   * @returns {Promise<Playlist>}
    */
   async createPlaylist(user, { name }) {
-    const { Playlist } = this.#uw.models;
+    const { db } = this.#uw;
+    const id = randomUUID();
 
-    const playlist = await Playlist.create({
-      name,
-      author: user._id,
-    });
+    const playlist = await db.insertInto('playlists')
+      .values({
+        id,
+        name,
+        userID: user.id,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
     // If this is the user's first playlist, immediately activate it.
-    if (user.activePlaylist == null) {
+    if (user.activePlaylistID == null) {
       this.#logger.info({ userId: user.id, playlistId: playlist.id }, 'activating first playlist');
-      user.activePlaylist = playlist._id;
-      await user.save();
+      await db.updateTable('users')
+        .where('users.id', '=', user.id)
+        .set({ activePlaylistID: playlist.id })
+        .execute();
     }
 
     return playlist;
@@ -158,7 +165,9 @@ class PlaylistsRepository {
       .groupBy('playlists.id')
       .execute();
 
-    return playlists;
+    return playlists.map((playlist) => {
+      return { ...playlist, size: Number(playlist.size) };
+    });
   }
 
   /**
@@ -225,17 +234,16 @@ class PlaylistsRepository {
    * @param {{ id: string }} playlist
    * @param {string|undefined} filter
    * @param {{ offset: number, limit: number }} pagination
-   * @return_s {Promise<Page<PlaylistItem, { offset: number, limit: number }>>}
    */
   async getPlaylistItems(playlist, filter, pagination) {
     const { db } = this.#uw;
 
-    const query = db.selectFrom('playlistItems')
+    let query = db.selectFrom('playlistItems')
       .where('playlistID', '=', playlist.id)
       .innerJoin('media', 'playlistItems.mediaID', 'media.id')
       .select([
-        'playlistItems.id as _id',
-        'media.id as media._id',
+        'playlistItems.id as id',
+        'media.id as media.id',
         'media.sourceID as media.sourceID',
         'media.sourceType as media.sourceType',
         'media.sourceData as media.sourceData',
@@ -249,11 +257,11 @@ class PlaylistsRepository {
         'playlistItems.end',
       ]);
     if (filter != null) {
-      query.where('playlistItems.artist', 'like', filter)
+      query = query.where('playlistItems.artist', 'like', filter)
         .orWhere('playlistItems.title', 'like', filter);
     }
 
-    query
+    query = query
       .offset(pagination.offset)
       .limit(pagination.limit);
 
@@ -279,13 +287,13 @@ class PlaylistsRepository {
 
     const playlistItems = playlistItemsRaw.map((raw) => {
       return {
-        _id: raw._id,
+        _id: raw.id,
         artist: raw.artist,
         title: raw.title,
         start: raw.start,
         end: raw.end,
         media: {
-          _id: raw['media._id'],
+          _id: raw['media.id'],
           artist: raw['media.artist'],
           title: raw['media.title'],
           duration: raw['media.duration'],
