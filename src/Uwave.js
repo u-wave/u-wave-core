@@ -27,6 +27,17 @@ import migrations from './plugins/migrations.js';
 const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 
+class UwCamelCasePlugin extends CamelCasePlugin {
+  /**
+   * @param {string} str
+   * @override
+   * @protected
+   */
+  camelCase (str) {
+    return super.camelCase(str).replace(/Id$/, 'ID');
+  }
+}
+
 /**
  * @typedef {import('./Source.js').SourcePlugin} SourcePlugin
  */
@@ -162,7 +173,9 @@ class UwaveServer extends EventEmitter {
           database: 'uwave_test',
         }),
       }),
-      plugins: [new CamelCasePlugin()],
+      plugins: [
+        new UwCamelCasePlugin(),
+      ],
       log: ['query', 'error'],
     });
     this.mongo = mongoose.createConnection(this.options.mongo);
