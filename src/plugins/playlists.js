@@ -327,104 +327,60 @@ class PlaylistsRepository {
    * Get playlists containing a particular Media.
    *
    * @typedef {object} GetPlaylistsContainingMediaOptions
-   * @prop {ObjectId} [author]
+   * @prop {string} [author]
    * @prop {string[]} [fields]
    *
-   * @param {ObjectId} mediaID
+   * @param {string} mediaID
    * @param {GetPlaylistsContainingMediaOptions} options
-   * @return {Promise<Playlist[]>}
    */
   async getPlaylistsContainingMedia(mediaID, options = {}) {
-    const { Playlist } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const aggregate = [];
+    let query = db.selectFrom('playlists')
+      .select(['playlists.id', 'playlists.name', 'playlists.createdAt'])
+      .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
+      .where('playlistItems.mediaID', '=', mediaID)
+      .groupBy('playlistItems.playlistID')
     if (options.author) {
-      aggregate.push({ $match: { author: options.author } });
+      query = query.where('playlists.userID', '=', options.author)
     }
 
-    aggregate.push(
-      // populate media array
-      {
-        $lookup: {
-          from: 'playlistitems', localField: 'media', foreignField: '_id', as: 'media',
-        },
-      },
-      // check if any media entry contains the id
-      { $match: { 'media.media': mediaID } },
-      // reduce data sent in `media` array—this is still needed to match the result of other
-      // `getPlaylists()` functions
-      { $addFields: { media: '$media.media' } },
-    );
-
-    if (options.fields) {
-      /** @type {Record<string, 1>} */
-      const fields = {};
-      options.fields.forEach((fieldName) => {
-        fields[fieldName] = 1;
-      });
-      aggregate.push({
-        $project: fields,
-      });
-    }
-
-    const playlists = await Playlist.aggregate(aggregate, { maxTimeMS: 5_000 });
-    return playlists.map((raw) => Playlist.hydrate(raw));
+    const playlists = await query.execute();
+    return playlists;
   }
 
   /**
    * Get playlists that contain any of the given medias. If multiple medias are in a single
    * playlist, that playlist will be returned multiple times, keyed on the media's unique ObjectId.
    *
-   * @param {ObjectId[]} mediaIDs
-   * @param {{ author?: ObjectId }} options
-   * @return {Promise<Map<string, Playlist[]>>}
-   *   A map of stringified `Media` `ObjectId`s to the Playlist objects that contain them.
+   * @param {string[]} mediaIDs
+   * @param {{ author?: string }} options
+   * @returns A map of stringified `Media` `ObjectId`s to the Playlist objects that contain them.
    */
   async getPlaylistsContainingAnyMedia(mediaIDs, options = {}) {
-    const { Playlist } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const aggregate = [];
-
-    if (options.author) {
-      aggregate.push({ $match: { author: options.author } });
+    if (mediaIDs.length === 0) {
+      return new Map();
     }
 
-    aggregate.push(
-      // Store the `size` so we can remove the `.media` property later.
-      { $addFields: { size: { $size: '$media' } } },
-      // Store the playlist data on a property so lookup data does not pollute it.
-      // The result data is easier to process as separate {playlist, media} properties.
-      { $replaceRoot: { newRoot: { playlist: '$$ROOT' } } },
-      // Find the playlist items in each playlist.
-      {
-        $lookup: {
-          from: 'playlistitems',
-          localField: 'playlist.media',
-          foreignField: '_id',
-          as: 'media',
-        },
-      },
-      // Unwind so we can match on individual playlist items.
-      { $unwind: '$media' },
-      {
-        $match: {
-          'media.media': { $in: mediaIDs },
-        },
-      },
-      // Omit the potentially large list of media IDs that we don't use.
-      { $project: { 'playlist.media': 0 } },
-    );
+    let query = db.selectFrom('playlists')
+      .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
+      .select(['playlists.id', 'playlists.name', 'playlists.createdAt', 'playlistItems.mediaID'])
+      .where('playlistItems.mediaID', 'in', mediaIDs);
+    if (options.author) {
+      query = query.where('playlists.userID', '=', options.author)
+    }
 
-    const pairs = await Playlist.aggregate(aggregate);
+    const playlists = await query.execute();
 
     const playlistsByMediaID = new Map();
-    pairs.forEach(({ playlist, media }) => {
-      const stringID = media.media.toString();
-      const playlists = playlistsByMediaID.get(stringID);
+    playlists.forEach(({ mediaID, ...playlist }) => {
+      const playlists = playlistsByMediaID.get(mediaID);
       if (playlists) {
         playlists.push(playlist);
       } else {
-        playlistsByMediaID.set(stringID, [playlist]);
+        playlistsByMediaID.set(mediaID, [playlist]);
       }
     });
 

@@ -11,6 +11,11 @@ const {
  * @typedef {Record<string, string[]>} IncludedOptions
  */
 
+/** @param {{ _id: string, id?: undefined } | { _id?: undefined, id: string }} d */
+function getID (d) {
+  return d._id ?? d.id;
+}
+
 /**
  * @param {any[]} data
  * @param {IncludedOptions} included
@@ -38,9 +43,9 @@ function extractIncluded(data, included) {
    * @param {{ _id: string }} item
    */
   function include(type, item) {
-    if (!had.has(type + item._id)) {
+    if (!had.has(type + getID(item))) {
       includeds[type].push(item);
-      had.add(type + item._id);
+      had.add(type + getID(item));
     }
   }
 
@@ -56,10 +61,10 @@ function extractIncluded(data, included) {
             item = cloneDeep(item);
           }
           if (Array.isArray(includedItem)) {
-            setPath(item, path, includedItem.map((i) => i._id));
+            setPath(item, path, includedItem.map(getID));
             includedItem.forEach((i) => include(type, i));
           } else {
-            setPath(item, path, includedItem._id);
+            setPath(item, path, getID(includedItem));
             include(type, includedItem);
           }
         }

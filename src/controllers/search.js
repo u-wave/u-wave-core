@@ -73,7 +73,7 @@ async function search(req) {
   const { source: sourceName } = req.params;
   const { query, include } = req.query;
   const uw = req.uwave;
-  const { Media } = uw.models;
+  const db = uw.db;
 
   const source = uw.source(sourceName);
   if (!source) {
@@ -91,23 +91,23 @@ async function search(req) {
   // Track medias whose `sourceData` property no longer matches that from the source.
   // This can happen because the media was actually changed, but also because of new
   // features in the source implementation.
-  /** @type {Map<ObjectId, Media['sourceData']>} */
+  /** @type {Map<string, import('../schema.js').MediaTable['sourceData']>} */
   const mediasNeedSourceDataUpdate = new Map();
 
-  /** @type {Media[]} */
-  const mediasInSearchResults = await Media.find({
-    sourceType: sourceName,
-    sourceID: { $in: Array.from(searchResultsByID.keys()) },
-  });
+  const mediasInSearchResults = await db.selectFrom('media')
+    .select(['id', 'sourceType', 'sourceID', 'sourceData'])
+    .where('sourceType', '=', sourceName)
+    .where('sourceID', 'in', Array.from(searchResultsByID.keys()))
+    .execute();
 
-  /** @type {Map<string, Media>} */
+  /** @type {Map<string, typeof mediasInSearchResults[0]>} */
   const mediaBySourceID = new Map();
   mediasInSearchResults.forEach((media) => {
     mediaBySourceID.set(media.sourceID, media);
 
     const freshMedia = searchResultsByID.get(media.sourceID);
     if (freshMedia && !isEqual(media.sourceData, freshMedia.sourceData)) {
-      mediasNeedSourceDataUpdate.set(media._id, freshMedia.sourceData);
+      mediasNeedSourceDataUpdate.set(media.id, freshMedia.sourceData);
     }
   });
 
@@ -119,8 +119,8 @@ async function search(req) {
   // Only include related playlists if requested
   if (typeof include === 'string' && include.split(',').includes('playlists')) {
     const playlistsByMediaID = await uw.playlists.getPlaylistsContainingAnyMedia(
-      mediasInSearchResults.map((media) => media._id),
-      { author: user._id },
+      mediasInSearchResults.map((media) => media.id),
+      { author: user.id },
     ).catch((error) => {
       uw.logger.error({ ns: 'uwave:search', err: error }, 'playlists containing media lookup failed');
       // just omit the related playlists if we timed out or crashed
@@ -130,7 +130,7 @@ async function search(req) {
     searchResults.forEach((result) => {
       const media = mediaBySourceID.get(String(result.sourceID));
       if (media) {
-        result.inPlaylists = playlistsByMediaID.get(media._id.toString());
+        result.inPlaylists = playlistsByMediaID.get(media.id);
       }
     });
 
