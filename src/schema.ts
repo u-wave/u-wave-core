@@ -46,6 +46,7 @@ export interface PlaylistItemTable {
 
 export interface HistoryEntryTable {
   id: Generated<string>,
+  userID: string,
   mediaID: string,
   artist: string,
   title: string,
