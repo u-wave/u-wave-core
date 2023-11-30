@@ -1,6 +1,5 @@
 'use strict';
 
-const { randomUUID } = require('node:crypto');
 const { sql } = require('kysely');
 
 /**
@@ -26,6 +25,7 @@ async function up({ context: uw }) {
   await db.schema.createTable('users')
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('username', 'text', (col) => col.notNull().unique())
+    .addColumn('password', 'text')
     .addColumn('slug', 'text', (col) => col.notNull().unique())
     .addColumn('active_playlist_id', 'uuid')
     .addColumn('pending_activation', 'boolean', (col) => col.defaultTo(null))

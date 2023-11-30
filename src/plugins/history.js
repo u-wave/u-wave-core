@@ -29,12 +29,12 @@ class HistoryRepository {
   }
 
   /**
-   * @param {object|null} filter
    * @param {{ offset?: number, limit?: number }} [pagination]
+   * @param {{ user?: string }} [options]
    * @returns {Promise<Page<PopulatedHistoryEntry, { offset: number, limit: number }>>}
    */
-  async getHistory(filter, pagination = {}) {
-    const { HistoryEntry } = this.#uw.models;
+  async getHistory(pagination = {}, options = {}) {
+    const { db } = this.#uw;
 
     const offset = pagination.offset ?? 0;
     const limit = clamp(
@@ -43,44 +43,42 @@ class HistoryRepository {
       MAX_PAGE_SIZE,
     );
 
-    const total = filter != null
-      ? await HistoryEntry.where(filter).countDocuments()
-      : await HistoryEntry.estimatedDocumentCount();
-    /** @type {import('mongoose').PipelineStage[]} */
-    const aggregate = [];
-    if (filter != null) {
-      aggregate.push({ $match: filter });
+    let query = db.selectFrom('historyEntries');
+    if (options.user) {
+      query = query.where('userID', '=', options.user);
     }
-    aggregate.push(
-      { $sort: { playedAt: -1 } },
-      { $skip: offset },
-      { $limit: limit },
-      {
-        $lookup: {
-          from: 'media',
-          localField: 'media.media',
-          foreignField: '_id',
-          as: 'media.media',
-        },
-      },
-      { $unwind: '$media.media' },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      { $project: { __v: 0, 'media.media.__v': 0, 'user.__v': 0 } },
-    );
-    const query = HistoryEntry.aggregate(aggregate);
 
-    /** @type {PopulatedHistoryEntry[]} */
-    const results = /** @type {any} */ (await query);
+    const total = await query.select((eb) => eb.fn.countAll().as('count')).executeTakeFirstOrThrow();
+    const historyEntries = await query
+      .innerJoin('users', 'historyEntries.userID', 'users.id')
+      .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .select([
+        'historyEntries.id',
+        'historyEntries.artist',
+        'historyEntries.title',
+        'historyEntries.start',
+        'historyEntries.end',
+        'historyEntries.createdAt as playedAt',
+        'users.id as user.id',
+        'users.username as user.username',
+        'users.slug as user.slug',
+        'users.createdAt as user.createdAt',
+        'media.id as media.id',
+        'media.artist as media.artist',
+        'media.title as media.title',
+        'media.thumbnail as media.thumbnail',
+        'media.duration as media.duration',
+        'media.sourceType as media.sourceType',
+        'media.sourceID as media.sourceID',
+        'media.sourceData as media.sourceData',
+      ])
+      .orderBy('historyEntries.createdAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .execute();
+    console.log(historyEntries);
 
-    return new Page(results, {
+    return new Page(historyEntries, {
       pageSize: pagination ? pagination.limit : undefined,
       filtered: total,
       total,
@@ -96,7 +94,7 @@ class HistoryRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   getRoomHistory(pagination = {}) {
-    return this.getHistory(null, pagination);
+    return this.getHistory(pagination, {});
   }
 
   /**
@@ -104,7 +102,7 @@ class HistoryRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   getUserHistory(user, pagination = {}) {
-    return this.getHistory({ user: user._id }, pagination);
+    return this.getHistory(pagination, { user: user._id });
   }
 }
 
