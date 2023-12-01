@@ -7,16 +7,13 @@ const { sql } = require('kysely');
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
  */
 async function up({ context: uw }) {
-  const { db } = uw;
-
-  const users = await uw.models.User.find().lean();
-  const medias = await uw.models.Media.find().lean();
+  const { db, models } = uw;
 
   /** @type {Map<string, string>} */
   const idMap = new Map();
 
   await db.transaction().execute(async (tx) => {
-    for (const media of medias) {
+    for await (const media of models.Media.find().lean()) {
       const id = randomUUID();
       await tx.insertInto('media')
         .values({
@@ -39,7 +36,7 @@ async function up({ context: uw }) {
       idMap.set(media._id.toString(), id);
     }
 
-    for (const user of users) {
+    for await (const user of models.User.find().lean()) {
       const userID = randomUUID();
       idMap.set(user._id.toString(), userID);
 
@@ -53,7 +50,7 @@ async function up({ context: uw }) {
         })
         .execute();
 
-      for await (const playlist of uw.models.Playlist.where('author', user._id).lean()) {
+      for await (const playlist of models.Playlist.where('author', user._id).lean()) {
         const playlistID = randomUUID();
         idMap.set(playlist._id.toString(), playlistID);
 
@@ -71,7 +68,7 @@ async function up({ context: uw }) {
           const itemID = randomUUID();
           idMap.set(itemMongoID.toString(), itemID);
 
-          const item = await uw.models.PlaylistItem.findById(itemMongoID).lean();
+          const item = await models.PlaylistItem.findById(itemMongoID).lean();
           await tx.insertInto('playlistItems')
             .values({
               id: itemID,
@@ -87,6 +84,27 @@ async function up({ context: uw }) {
             .execute();
         }
       }
+    }
+
+    for await (const entry of models.HistoryEntry.find().lean()) {
+      const entryID = randomUUID();
+      idMap.set(entry._id.toString(), entryID);
+      const userID = idMap.get(entry.user.toString());
+      const mediaID = idMap.get(entry.media.media.toString());
+      await tx.insertInto('historyEntries')
+        .values({
+          id: entryID,
+          mediaID,
+          userID,
+          artist: entry.media.artist,
+          title: entry.media.title,
+          start: entry.media.start,
+          end: entry.media.end,
+          sourceData: entry.media.sourceData,
+          createdAt: entry.playedAt,
+          // TODO vote statistics
+        })
+        .execute();
     }
   });
 }

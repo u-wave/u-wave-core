@@ -61,8 +61,19 @@ async function up({ context: uw }) {
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('start', 'integer', (col) => col.notNull())
     .addColumn('end', 'integer', (col) => col.notNull())
+    .addColumn('source_data', 'jsonb')
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .execute();
+
+  /*
+  await db.schema.createTable('feedback')
+    .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('history_id', 'uuid', (col) => col.notNull().references('history_entries.id'))
+    // +1 or -1
+    .addColumn('vote', 'integer')
+    .addColumn('favorite', 'boolean')
+    .execute();
+  */
 
   await db.schema.alterTable('users')
     .addForeignKeyConstraint('users_active_playlist', ['active_playlist_id'], 'playlists', ['id'])

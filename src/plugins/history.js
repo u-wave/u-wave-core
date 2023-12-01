@@ -49,7 +49,7 @@ class HistoryRepository {
     }
 
     const total = await query.select((eb) => eb.fn.countAll().as('count')).executeTakeFirstOrThrow();
-    const historyEntries = await query
+    const rows = await query
       .innerJoin('users', 'historyEntries.userID', 'users.id')
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
       .select([
@@ -58,6 +58,7 @@ class HistoryRepository {
         'historyEntries.title',
         'historyEntries.start',
         'historyEntries.end',
+        'historyEntries.sourceData',
         'historyEntries.createdAt as playedAt',
         'users.id as user.id',
         'users.username as user.username',
@@ -76,12 +77,41 @@ class HistoryRepository {
       .offset(offset)
       .limit(limit)
       .execute();
-    console.log(historyEntries);
+
+    const historyEntries = rows.map((row) => {
+      return {
+        _id: row.id,
+        playedAt: row.playedAt,
+        user: {
+          _id: row['user.id'],
+          username: row['user.username'],
+          slug: row['user.slug'],
+          createdAt: row['user.createdAt'],
+        },
+        media: {
+          artist: row.artist,
+          title: row.title,
+          start: row.start,
+          end: row.end,
+          sourceData: row.sourceData,
+          media: {
+            _id: row['media.id'],
+            sourceType: row['media.sourceType'],
+            sourceID: row['media.sourceID'],
+            sourceData: row['media.sourceData'],
+            artist: row['media.artist'],
+            title: row['media.title'],
+            thumbnail: row['media.thumbnail'],
+            duration: row['media.duration'],
+          },
+        },
+      };
+    });
 
     return new Page(historyEntries, {
       pageSize: pagination ? pagination.limit : undefined,
-      filtered: total,
-      total,
+      filtered: Number(total),
+      total: Number(total),
       current: { offset, limit },
       next: pagination ? { offset: offset + limit, limit } : undefined,
       previous: offset > 0

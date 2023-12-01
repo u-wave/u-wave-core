@@ -48,10 +48,16 @@ export interface HistoryEntryTable {
   id: Generated<string>,
   userID: string,
   mediaID: string,
+  /** Snapshot of the media artist name at the time this entry was played. */
   artist: string,
+  /** Snapshot of the media title at the time this entry was played. */
   title: string,
+  /** Time to start playback at. */
   start: number,
+  /** Time to stop playback at. */
   end: number,
+  /** Arbitrary source-specific data required for media playback. */
+  sourceData: JsonObject | null,
   createdAt: Date,
   updatedAt: Date,
 }
