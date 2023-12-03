@@ -35,7 +35,6 @@ class HistoryRepository {
   /**
    * @param {{ offset?: number, limit?: number }} [pagination]
    * @param {{ user?: UserID }} [options]
-   * @returns {Promise<Page<PopulatedHistoryEntry, { offset: number, limit: number }>>}
    */
   async getHistory(pagination = {}, options = {}) {
     const { db } = this.#uw;
@@ -136,7 +135,7 @@ class HistoryRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   getUserHistory(user, pagination = {}) {
-    return this.getHistory(pagination, { user: user._id });
+    return this.getHistory(pagination, { user: user.id });
   }
 }
 

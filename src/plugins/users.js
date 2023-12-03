@@ -18,13 +18,6 @@ function encryptPassword(password) {
   return bcrypt.hash(password, 10);
 }
 
-/**
- * @param {User} user
- */
-function getDefaultAvatar(user) {
-  return `https://sigil.u-wave.net/${user.id}`;
-}
-
 class UsersRepository {
   #uw;
 
@@ -63,7 +56,7 @@ class UsersRepository {
     const query = baseQuery
       .offset(offset)
       .limit(limit)
-      .selectAll();
+      .select(['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt']);
 
     const [
       users,
@@ -74,9 +67,6 @@ class UsersRepository {
       filteredQuery.executeTakeFirstOrThrow(),
       totalQuery.executeTakeFirstOrThrow(),
     ]);
-
-    // TODO remove
-    users.forEach((user) => user.roles = [])
 
     return new Page(users, {
       pageSize: limit,
@@ -94,20 +84,16 @@ class UsersRepository {
    * Get a user object by ID.
    *
    * @param {UserID} id
-   * @returns {Promise<User>}
    */
   async getUser(id) {
     const { db } = this.#uw;
 
     const user = await db.selectFrom('users')
       .where('id', '=', id)
-      .selectAll()
+      .select(['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt'])
       .executeTakeFirst();
 
-    // TODO remove
-    if (user) user.roles = [];
-
-    return user;
+    return user ? { ...user, roles: [] } : null;
   }
 
   /**
