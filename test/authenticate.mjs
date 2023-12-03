@@ -193,15 +193,10 @@ describe('Password Reset', () => {
     });
 
     const user = await uw.test.createUser();
-    await uw.models.Authentication.create({
-      email: 'test@example.com',
-      user,
-      hash: 'passwordhash',
-    });
 
     await supertest(uw.server)
       .post('/api/auth/password/reset')
-      .send({ email: 'test@example.com' })
+      .send({ email: user.email })
       .expect(200);
 
     sinon.assert.calledWithMatch(sendSpy, {
@@ -228,15 +223,10 @@ describe('Password Reset', () => {
     });
 
     const user = await uw.test.createUser();
-    await uw.models.Authentication.create({
-      email: 'test@example.com',
-      user,
-      hash: 'passwordhash',
-    });
 
     await supertest(uw.server)
       .post('/api/auth/password/reset')
-      .send({ email: 'test@example.com' })
+      .send({ email: user.email })
       .expect(200);
 
     sinon.assert.calledWithMatch(sendSpy, {

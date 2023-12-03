@@ -1,6 +1,10 @@
+import lodash, { pick } from 'lodash';
 import bcrypt from 'bcryptjs';
 import Page from '../Page.js';
 import { IncorrectPasswordError, UserNotFoundError } from '../errors/index.js';
+import { slugify } from 'transliteration';
+
+const { omit } = lodash;
 
 /**
  * @typedef {import('../schema.js').User} User
@@ -133,26 +137,12 @@ class UsersRepository {
    * @param {LocalLoginOptions} options
    */
   async localLogin({ email, password }) {
-    const { Authentication } = this.#uw.models;
-
-    const auth = /** @type {any} */ (await Authentication.findOne({
-      email: email.toLowerCase(),
-    }).populate('user').exec());
-
-    if (!auth || !auth.user) {
-      throw new UserNotFoundError({ email });
-    }
-
-    const correct = await bcrypt.compare(password, auth.hash);
-    if (!correct) {
-      throw new IncorrectPasswordError();
-    }
-
     const user = await this.#uw.db.selectFrom('users')
-      .where('username', '=', auth.user.username)
+      .where('email', '=', email)
       .select([
         'id',
         'username',
+        'password',
         'slug',
         'pendingActivation',
         'createdAt',
@@ -162,8 +152,16 @@ class UsersRepository {
     if (!user) {
       throw new UserNotFoundError({ email });
     }
+    if (!user.password) {
+      throw new IncorrectPasswordError();
+    }
 
-    return user;
+    const correct = await bcrypt.compare(password, user.password);
+    if (!correct) {
+      throw new IncorrectPasswordError();
+    }
+
+    return omit(user, 'password');
   }
 
   /**
@@ -178,7 +176,7 @@ class UsersRepository {
       username: profile.displayName,
       avatar: profile.photos && profile.photos.length > 0 ? profile.photos[0].value : undefined,
     };
-    return this.#uw.users.findOrCreateSocialUser(user);
+    return this.findOrCreateSocialUser(user);
   }
 
   /**
@@ -197,65 +195,65 @@ class UsersRepository {
     username,
     avatar,
   }) {
-    const { User, Authentication } = this.#uw.models;
+    const { db } = this.#uw;
 
     this.#logger.info({ type, id }, 'find or create social');
 
-    // we need this type assertion because the `user` property actually contains
-    // an ObjectId in this return value. We are definitely filling in a User object
-    // below before using this variable.
-    /** @type {null | (Omit<Authentication, 'user'> & { user: User })} */
-    let auth = await Authentication.findOne({ type, id });
-    if (auth) {
-      await auth.populate('user');
+    const user = await db.transaction().execute(async (tx) => {
+      const auth = await tx.selectFrom('authServices')
+        .innerJoin('users', 'users.id', 'authServices.userID')
+        .where('service', '=', type)
+        .where('serviceID', '=', id)
+        .select([
+          'authServices.service',
+          'authServices.serviceID',
+          'authServices.serviceAvatar',
+          'users.id',
+          'users.username',
+          'users.slug',
+          'users.activePlaylistID',
+          'users.pendingActivation',
+          'users.createdAt',
+          'users.updatedAt',
+        ])
+        .executeTakeFirst();
 
-      if (avatar && auth.avatar !== avatar) {
-        auth.avatar = avatar;
-        await auth.save();
-      }
-    } else {
-      const user = new User({
-        username: username ? username.replace(/\s/g, '') : `${type}.${id}`,
-        roles: ['user'],
-        pendingActivation: type,
-      });
-      await user.validate();
-
-      // @ts-expect-error TS2322: the type check fails because the `user` property actually contains
-      // an ObjectId in this return value. We are definitely filling in a User object below before
-      // using this variable.
-      auth = new Authentication({
-        type,
-        user,
-        id,
-        avatar,
-        // HACK, providing a fake email so we can use `unique: true` on emails
-        email: `${id}@${type}.sociallogin`,
-      });
-
-      // Just so typescript knows `auth` is not null here.
-      if (!auth) throw new TypeError();
-
-      try {
-        await Promise.all([
-          user.save(),
-          auth.save(),
-        ]);
-      } catch (e) {
-        if (!auth.isNew) {
-          await auth.deleteOne();
+      if (auth) {
+        if (avatar && auth.serviceAvatar !== avatar) {
+          auth.serviceAvatar = avatar;
         }
-        await user.deleteOne();
-        throw e;
+
+        return pick(auth, ['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt']);
+      } else {
+        const user = await tx.insertInto('users')
+          .values({
+            username: username ? username.replace(/\s/g, '') : `${type}.${id}`,
+            slug: slugify(username),
+            pendingActivation: true, // type,
+            // avatar,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+
+        await tx.insertInto('authServices')
+          .values({
+            userID: user.id,
+            service: type,
+            serviceID: id,
+            serviceAvatar: avatar,
+          })
+          .executeTakeFirstOrThrow();
+
+        this.#uw.publish('user:create', {
+          user: user.id,
+          auth: { type, id },
+        });
+
+        return user;
       }
+    });
 
-      this.#uw.publish('user:create', {
-        user: user.id,
-        auth: { type, id },
-      });
-    }
-
-    return auth.user;
+    return user;
   }
 
   /**
@@ -265,40 +263,30 @@ class UsersRepository {
   async createUser({
     username, email, password,
   }) {
-    const { User, Authentication } = this.#uw.models;
+    const { db } = this.#uw;
 
     this.#logger.info({ username, email: email.toLowerCase() }, 'create user');
 
     const hash = await encryptPassword(password);
 
-    const user = new User({
-      username,
-      roles: ['user'],
-    });
-    await user.validate();
-
-    const auth = new Authentication({
-      type: 'local',
-      user,
-      email: email.toLowerCase(),
-      hash,
-    });
-
-    try {
-      await Promise.all([
-        user.save(),
-        auth.save(),
-      ]);
-      // Two-stage saving to let mongodb decide the user ID before we generate an avatar URL.
-      user.avatar = getDefaultAvatar(user);
-      await user.save();
-    } catch (e) {
-      if (!auth.isNew) {
-        await auth.deleteOne();
-      }
-      await user.deleteOne();
-      throw e;
-    }
+    const user = await db.insertInto('users')
+      .values({
+        username,
+        email,
+        password: hash,
+        slug: slugify(username),
+        pendingActivation: false,
+      })
+      .returning([
+        'id',
+        'username',
+        'slug',
+        'activePlaylistID',
+        'pendingActivation',
+        'createdAt',
+        'updatedAt',
+      ])
+      .executeTakeFirstOrThrow();
 
     this.#uw.publish('user:create', {
       user: user.id,
@@ -313,48 +301,51 @@ class UsersRepository {
    * @param {string} password
    */
   async updatePassword(id, password) {
-    const { Authentication } = this.#uw.models;
-
-    const user = await this.getUser(id);
-    if (!user) throw new UserNotFoundError({ id });
+    const { db } = this.#uw;
 
     const hash = await encryptPassword(password);
-
-    const auth = await Authentication.findOneAndUpdate({
-      // TODO re enable once a migrations thing is set up so that all existing
-      // records can be updated to add this.
-      // type: 'local',
-      user: user.id,
-    }, { hash });
-
-    if (!auth) {
-      throw new UserNotFoundError({ id: user.id });
+    const result = await db.updateTable('users')
+      .where('id', '=', id)
+      .set({ password: hash })
+      .executeTakeFirst();
+    if (Number(result.numUpdatedRows) === 0) {
+      throw new UserNotFoundError({ id });
     }
   }
 
   /**
    * @param {UserID} id
-   * @param {Record<string, string>} update
+   * @param {Partial<Pick<User, 'username'>>} update
    * @param {{ moderator?: User }} [options]
    */
   async updateUser(id, update = {}, options = {}) {
+    const { db } = this.#uw;
+
     const user = await this.getUser(id);
     if (!user) throw new UserNotFoundError({ id });
 
     this.#logger.info({ userId: user.id, update }, 'update user');
 
-    const moderator = options && options.moderator;
+    const moderator = options.moderator;
 
-    /** @type {Record<string, string>} */
+    /** @type {typeof update} */
     const old = {};
     Object.keys(update).forEach((key) => {
-      // FIXME We should somehow make sure that the type of `key` extends `keyof LeanUser` here.
+      // FIXME We should somehow make sure that the type of `key` extends `keyof User` here.
       // @ts-expect-error TS7053
       old[key] = user[key];
     });
     Object.assign(user, update);
 
-    await user.save();
+    const updatesFromDatabase = await db.updateTable('users')
+      .where('id', '=', id)
+      .set(update)
+      .returning(['username'])
+      .executeTakeFirst();
+    if (!updatesFromDatabase) {
+      throw new UserNotFoundError({ id });
+    }
+    Object.assign(user, updatesFromDatabase);
 
     // Take updated keys from the Model again,
     // as it may apply things like Unicode normalization on the values.

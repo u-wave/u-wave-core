@@ -21,19 +21,31 @@ export interface MediaTable {
   title: string,
   duration: number,
   thumbnail: string,
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
 }
 
-export type User = Selected<UserTable>;
+export type User = Selected<Omit<UserTable, 'email' | 'password'>>;
 export interface UserTable {
   id: Generated<UserID>,
   username: string,
+  email: string | null,
+  password: string | null,
   slug: string,
   activePlaylistID: PlaylistID | null,
   pendingActivation: boolean,
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
+}
+
+export type AuthService = Selected<AuthServiceTable>;
+export interface AuthServiceTable {
+  userID: UserID,
+  service: string,
+  serviceID: string,
+  serviceAvatar: string | null,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
 }
 
 export type Playlist = Selected<PlaylistTable>;
@@ -41,8 +53,8 @@ export interface PlaylistTable {
   id: Generated<PlaylistID>,
   userID: UserID,
   name: string,
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
 }
 
 export type PlaylistItem = Selected<PlaylistItemTable>;
@@ -54,8 +66,8 @@ export interface PlaylistItemTable {
   title: string,
   start: number,
   end: number,
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
 }
 
 export type HistoryEntry = Selected<HistoryEntryTable>;
@@ -73,13 +85,14 @@ export interface HistoryEntryTable {
   end: number,
   /** Arbitrary source-specific data required for media playback. */
   sourceData: JsonObject | null,
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
 }
 
 export interface Database {
   media: MediaTable,
   users: UserTable,
+  authServices: AuthServiceTable,
   playlists: PlaylistTable,
   playlistItems: PlaylistItemTable,
   historyEntries: HistoryEntryTable,

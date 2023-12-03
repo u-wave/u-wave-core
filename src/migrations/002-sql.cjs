@@ -25,10 +25,20 @@ async function up({ context: uw }) {
   await db.schema.createTable('users')
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('username', 'text', (col) => col.notNull().unique())
+    .addColumn('email', 'text')
     .addColumn('password', 'text')
     .addColumn('slug', 'text', (col) => col.notNull().unique())
     .addColumn('active_playlist_id', 'uuid')
     .addColumn('pending_activation', 'boolean', (col) => col.defaultTo(null))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .execute();
+
+  await db.schema.createTable('auth_services')
+    .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('service', 'text', (col) => col.notNull())
+    .addColumn('service_id', 'text', (col) => col.notNull())
+    .addColumn('service_avatar', 'text')
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .execute();

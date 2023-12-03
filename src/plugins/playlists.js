@@ -76,7 +76,7 @@ function toPlaylistItem(itemProps, media) {
   const { artist, title } = itemProps;
   const { start, end } = getStartEnd(itemProps, media);
   return {
-    media,
+    mediaID: media.id,
     artist: artist ?? media.artist,
     title: title ?? media.title,
     start,
@@ -396,7 +396,7 @@ class PlaylistsRepository {
    * @param {PlaylistItemDesc[]} items
    */
   async createPlaylistItems(user, items) {
-    const { Media, PlaylistItem } = this.#uw.models;
+    const { db } = this.#uw;
 
     if (!items.every(isValidPlaylistItem)) {
       throw new Error('Cannot add a playlist item without a proper media source type and ID.');
@@ -405,16 +405,14 @@ class PlaylistsRepository {
     // Group by source so we can retrieve all unknown medias from the source in
     // one call.
     const itemsBySourceType = groupBy(items, 'sourceType');
-    /**
-     * @type {{ media: Media, artist: string, title: string, start: number, end: number }[]}
-     */
+    /** @type {{ mediaID: MediaID, artist: string, title: string, start: number, end: number }[]} */
     const playlistItems = [];
     const promises = Object.entries(itemsBySourceType).map(async ([sourceType, sourceItems]) => {
-      /** @type {Media[]} */
-      const knownMedias = await Media.find({
-        sourceType,
-        sourceID: { $in: sourceItems.map((item) => String(item.sourceID)) },
-      });
+      const knownMedias = await db.selectFrom('media')
+        .where('sourceType', '=', sourceType)
+        .where('sourceID', 'in', sourceItems.map((item) => String(item.sourceID)))
+        .selectAll()
+        .execute();
 
       /** @type {Set<string>} */
       const knownMediaIDs = new Set();
@@ -435,17 +433,36 @@ class PlaylistsRepository {
         // @ts-expect-error TS2322
         const unknownMedias = await this.#uw.source(sourceType)
           .get(user, unknownMediaIDs);
-        allMedias = allMedias.concat(await Media.create(unknownMedias));
+        const inserted = await db.insertInto('media')
+          .values(unknownMedias.map((media) => ({
+            sourceType: media.sourceType,
+            sourceID: media.sourceID,
+            sourceData: media.sourceData,
+            artist: media.artist,
+            title: media.title,
+            duration: media.duration,
+            thumbnail: media.thumbnail,
+          })))
+          .returningAll()
+          .execute();
+        allMedias = allMedias.concat(inserted);
       }
 
-      const itemsWithMedia = sourceItems.map((item) => {
+      for (const item of sourceItems) {
         const media = allMedias.find((compare) => compare.sourceID === String(item.sourceID));
         if (!media) {
           throw new MediaNotFoundError({ sourceType: item.sourceType, sourceID: item.sourceID });
         }
-        return toPlaylistItem(item, media);
-      });
-      playlistItems.push(...itemsWithMedia);
+        const { start, end } = getStartEnd(item, media);
+        playlistItems.push({
+          playlistID: playlist.id,
+          mediaID: media.id,
+          artist: item.artist ?? media.artist,
+          title: item.title ?? media.title,
+          start,
+          end,
+        });
+      }
     });
 
     await Promise.all(promises);
@@ -453,7 +470,11 @@ class PlaylistsRepository {
     if (playlistItems.length === 0) {
       return [];
     }
-    return PlaylistItem.create(playlistItems);
+
+    await db.insertInto('playlistItems')
+      .values(playlistItems)
+      .returningAll()
+      .execute();
   }
 
   /**
@@ -477,7 +498,7 @@ class PlaylistsRepository {
 
     const newItems = await this.createPlaylistItems(user, items);
     const oldMedia = playlist.media;
-    const insertIndex = after === null ? -1 : oldMedia.findIndex((item) => item.equals(after));
+    const insertIndex = after === null ? -1 : oldMedia.indexOf(after);
     playlist.media = [
       ...oldMedia.slice(0, insertIndex + 1),
       ...newItems.map((item) => item.id),
@@ -516,12 +537,11 @@ class PlaylistsRepository {
     const itemsInPlaylist = [...playlist.media];
     const itemIDsInPlaylist = new Set(itemsInPlaylist.map((item) => `${item}`));
     // Only attempt to move items that are actually in the playlist.
-    const itemIDsToInsert = itemIDs.filter((id) => itemIDsInPlaylist.has(`${id}`));
+    const itemIDsToInsert = itemIDs.filter((id) => itemIDsInPlaylist.has(id));
 
     // Remove the items that we are about to move.
-    const newMedia = itemsInPlaylist.filter((item) => (
-      itemIDsToInsert.every((insert) => !insert.equals(item))
-    ));
+    // TODO use Set
+    const newMedia = itemsInPlaylist.filter((item) => !itemIDsToInsert.includes(item));
     // Reinsert items at their new position.
     const insertIndex = afterID
       ? newMedia.findIndex((item) => item.equals(afterID))
