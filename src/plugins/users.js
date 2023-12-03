@@ -1,10 +1,10 @@
-import lodash, { pick } from 'lodash';
+import lodash from 'lodash';
 import bcrypt from 'bcryptjs';
 import Page from '../Page.js';
 import { IncorrectPasswordError, UserNotFoundError } from '../errors/index.js';
 import { slugify } from 'transliteration';
 
-const { omit } = lodash;
+const { pick, omit } = lodash;
 
 /**
  * @typedef {import('../schema.js').User} User
