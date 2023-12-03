@@ -19,7 +19,7 @@ async function up({ context: uw }) {
     .addColumn('thumbnail', 'text', (col) => col.notNull())
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addUniqueConstraint('source_key', ['source_type', 'source_id'])
+    .addUniqueConstraint('media_source_key', ['source_type', 'source_id'])
     .execute();
 
   await db.schema.createTable('users')
@@ -32,6 +32,7 @@ async function up({ context: uw }) {
     .addColumn('pending_activation', 'boolean', (col) => col.defaultTo(null))
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addUniqueConstraint('user_email', ['email'])
     .execute();
 
   await db.schema.createTable('auth_services')
@@ -41,6 +42,8 @@ async function up({ context: uw }) {
     .addColumn('service_avatar', 'text')
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addUniqueConstraint('user_auth_service', ['user_id', 'service'])
+    .addUniqueConstraint('auth_service', ['service', 'service_id'])
     .execute();
 
   await db.schema.createTable('playlists')
