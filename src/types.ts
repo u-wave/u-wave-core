@@ -7,7 +7,7 @@ import type { JsonObject } from 'type-fest';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import type UwaveServer from './Uwave.js';
 import type { HttpApi } from './HttpApi.js';
-import type { User as UwaveUser } from './models/index.js';
+import type { User as UwaveUser } from './schema.js';
 import type { AuthenticateOptions } from './controllers/authenticate.js';
 
 // Add üWave specific request properties.

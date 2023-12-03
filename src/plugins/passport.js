@@ -10,7 +10,8 @@ const schema = JSON.parse(
 );
 
 /**
- * @typedef {import('../models/User.js').User} User
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
  *
  * @typedef {{
  *   callbackURL?: string,
@@ -43,18 +44,18 @@ class PassportPlugin extends Passport {
 
     /**
      * @param {Express.User} user
-     * @returns {Promise<string>}
+     * @returns {Promise<UserID>}
      */
     function serializeUser(user) {
       console.log('serializeUser', user);
-      /** @type {string} */
+      /** @type {UserID} */
       // @ts-expect-error `user` is actually an instance of the User model
       // but we can't express that
       const userID = user.id || user._id;
       return Promise.resolve(userID);
     }
     /**
-     * @param {string} id
+     * @param {UserID} id
      * @returns {Promise<User|null>}
      */
     function deserializeUser(id) {

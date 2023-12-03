@@ -1,11 +1,10 @@
 import bcrypt from 'bcryptjs';
-import escapeStringRegExp from 'escape-string-regexp';
 import Page from '../Page.js';
 import { IncorrectPasswordError, UserNotFoundError } from '../errors/index.js';
 
 /**
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Authentication} Authentication
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').UserID} UserID
  */
 
 /**
@@ -47,21 +46,20 @@ class UsersRepository {
       limit = 50,
     } = pagination;
 
-    const query = db.selectFrom('users').selectAll();
+    let baseQuery = db.selectFrom('users');
     if (filter != null) {
-      query.where('username', 'like', filter);
+      baseQuery = baseQuery.where('username', 'like', filter);
     }
-
-    query
-      .offset(offset)
-      .limit(limit);
 
     const totalQuery = db.selectFrom('users')
       .select((eb) => eb.fn.countAll().as('count'));
 
-    const filteredQuery = filter == null ? totalQuery : db.selectFrom('users')
-      .select((eb) => eb.fn.countAll().as('count'))
-      .where('username', 'like', filter);
+    const filteredQuery = filter == null ? totalQuery : baseQuery.select((eb) => eb.fn.countAll().as('count'));
+
+    const query = baseQuery
+      .offset(offset)
+      .limit(limit)
+      .selectAll();
 
     const [
       users,
@@ -73,8 +71,9 @@ class UsersRepository {
       totalQuery.executeTakeFirstOrThrow(),
     ]);
 
-  // TODO remove
+    // TODO remove
     users.forEach((user) => user.roles = [])
+
     return new Page(users, {
       pageSize: limit,
       filtered: Number(filtered.count),
@@ -90,7 +89,8 @@ class UsersRepository {
   /**
    * Get a user object by ID.
    *
-   * @param {string} id
+   * @param {UserID} id
+   * @returns {Promise<User>}
    */
   async getUser(id) {
     const { db } = this.#uw;
@@ -99,7 +99,8 @@ class UsersRepository {
       .where('id', '=', id)
       .selectAll()
       .executeTakeFirst();
-  // TODO remove
+
+    // TODO remove
     if (user) user.roles = [];
 
     return user;
@@ -308,7 +309,7 @@ class UsersRepository {
   }
 
   /**
-   * @param {import('mongodb').ObjectId} id
+   * @param {UserID} id
    * @param {string} password
    */
   async updatePassword(id, password) {
@@ -323,7 +324,7 @@ class UsersRepository {
       // TODO re enable once a migrations thing is set up so that all existing
       // records can be updated to add this.
       // type: 'local',
-      user: user._id,
+      user: user.id,
     }, { hash });
 
     if (!auth) {
@@ -332,7 +333,7 @@ class UsersRepository {
   }
 
   /**
-   * @param {import('mongodb').ObjectId|string} id
+   * @param {UserID} id
    * @param {Record<string, string>} update
    * @param {{ moderator?: User }} [options]
    */

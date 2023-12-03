@@ -9,7 +9,10 @@ import ValidationError from '../errors/ValidationError.js';
 
 const { omit } = lodash;
 
-/** @typedef {import('../models/index.js').User} User */
+/**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
+ */
 
 /**
  * Extensible configuration store.
@@ -92,7 +95,7 @@ class ConfigStore {
   /**
    * @template {object} TSettings
    * @param {string} key
-   * @param {(settings: TSettings, user: string|null, patch: Partial<TSettings>) => void} listener
+   * @param {(settings: TSettings, user: UserID|null, patch: Partial<TSettings>) => void} listener
    */
   subscribe(key, listener) {
     this.#emitter.on(key, listener);

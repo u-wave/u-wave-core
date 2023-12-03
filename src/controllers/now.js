@@ -2,12 +2,15 @@ import { getBoothData } from './booth.js';
 import { serializePlaylist, serializeUser } from '../utils/serialize.js';
 
 /**
- * @param {import('../Uwave.js').default} uw
- * @param {Promise<import('../models/index.js').Playlist | null>} activePlaylist
+ * @typedef {import('../schema.js').UserID} UserID
  */
-async function getFirstItem(uw, activePlaylist) {
+
+/**
+ * @param {import('../Uwave.js').default} uw
+ * @param {import('../schema.js').Playlist} playlist
+ */
+async function getFirstItem(uw, playlist) {
   try {
-    const playlist = await activePlaylist;
     if (playlist && playlist.size > 0) {
       const item = await uw.playlists.getPlaylistItem(playlist, playlist.media[0]);
       return item;
@@ -33,7 +36,7 @@ function toInt(str) {
 async function getOnlineUsers(uw) {
   const { db } = uw;
 
-  const userIDs = await uw.redis.lrange('users', 0, -1);
+  const userIDs = /** @type {UserID[]} */ (await uw.redis.lrange('users', 0, -1));
   if (userIDs.length === 0) {
     return [];
   }
@@ -72,19 +75,8 @@ async function getState(req) {
   const booth = getBoothData(uw);
   const waitlist = uw.waitlist.getUserIDs();
   const waitlistLocked = uw.waitlist.isLocked();
-  let activePlaylist = user?.activePlaylist
-    ? uw.playlists.getUserPlaylist(user, user.activePlaylist)
-    : null;
-  const playlists = user ? uw.playlists.getUserPlaylists(user) : null;
-  const firstActivePlaylistItem = activePlaylist ? getFirstItem(uw, activePlaylist) : null;
-  const socketToken = user ? authRegistry.createAuthToken(user) : null;
-  const authStrategies = passport.strategies();
-  const time = Date.now();
-
-  if (activePlaylist != null) {
-    activePlaylist = activePlaylist
-      .then((playlist) => playlist?.id)
-      .catch((error) => {
+  let activePlaylist = user?.activePlaylistID
+    ? uw.playlists.getUserPlaylist(user, user.activePlaylistID).catch((error) => {
         // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
         // playlist should never be listed as the active playlist. Most likely this is not the
         // user's fault, so we should not error out on `/api/now`. Instead, pretend they don't have
@@ -94,8 +86,13 @@ async function getState(req) {
           return null;
         }
         throw error;
-      });
-  }
+      })
+    : Promise.resolve(null);
+  const playlists = user ? uw.playlists.getUserPlaylists(user) : null;
+  const firstActivePlaylistItem = activePlaylist.then((playlist) => playlist ? getFirstItem(uw, playlist) : null);
+  const socketToken = user ? authRegistry.createAuthToken(user) : null;
+  const authStrategies = passport.strategies();
+  const time = Date.now();
 
   const stateShape = {
     motd,
@@ -106,7 +103,7 @@ async function getState(req) {
     booth,
     waitlist,
     waitlistLocked,
-    activePlaylist,
+    activePlaylist: activePlaylist.then((playlist) => playlist?.id ?? null),
     firstActivePlaylistItem,
     playlists,
     socketToken,

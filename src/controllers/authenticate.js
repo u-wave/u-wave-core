@@ -19,6 +19,10 @@ import toListResponse from '../utils/toListResponse.js';
 const { BadRequest } = httpErrors;
 
 /**
+ * @typedef {import('../schema').UserID} UserID
+ */
+
+/**
  * @typedef {object} AuthenticateOptions
  * @prop {string|Buffer} secret
  * @prop {string} [origin]
@@ -66,7 +70,7 @@ async function getAuthStrategies(req) {
 /**
  * @param {import('express').Response} res
  * @param {import('../HttpApi.js').HttpApi} api
- * @param {import('../models/index.js').User} user
+ * @param {import('../schema.js').User} user
  * @param {AuthenticateOptions & { session: 'cookie' | 'token' }} options
  */
 async function refreshSession(res, api, user, options) {
@@ -129,7 +133,7 @@ async function login(req, res) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {import('../models/index.js').User} user
+ * @param {import('../schema.js').User} user
  * @param {string} service
  */
 async function getSocialAvatar(uw, user, service) {
@@ -137,7 +141,7 @@ async function getSocialAvatar(uw, user, service) {
 
   /** @type {import('../models/index.js').Authentication|null} */
   const auth = await Authentication.findOne({
-    user: user._id,
+    user: user.id,
     type: service,
   });
   if (auth && auth.avatar) {
@@ -409,14 +413,14 @@ async function changePassword(req) {
   const { reset: resetToken } = req.params;
   const { password } = req.body;
 
-  const userId = await redis.get(`reset:${resetToken}`);
-  if (!userId) {
+  const userID = /** @type {UserID} */ (await redis.get(`reset:${resetToken}`));
+  if (!userID) {
     throw new InvalidResetTokenError();
   }
 
-  const user = await users.getUser(userId);
+  const user = await users.getUser(userID);
   if (!user) {
-    throw new UserNotFoundError({ id: userId });
+    throw new UserNotFoundError({ id: userID });
   }
 
   await users.updatePassword(user.id, password);

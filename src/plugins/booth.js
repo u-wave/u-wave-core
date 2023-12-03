@@ -7,13 +7,13 @@ import routes from '../routes/booth.js';
 const { omit } = lodash;
 
 /**
+ * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('type-fest').JsonObject} JsonObject
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Playlist} Playlist
- * @typedef {import('../models/index.js').PlaylistItem} PlaylistItem
- * @typedef {import('../models/index.js').HistoryEntry} HistoryEntry
- * @typedef {import('../models/History.js').HistoryMedia} HistoryMedia
- * @typedef {import('../models/index.js').Media} Media
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').Playlist} Playlist
+ * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
+ * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
+ * @typedef {import('../schema.js').Media} Media
  * @typedef {{ user: User }} PopulateUser
  * @typedef {{ playlist: Playlist }} PopulatePlaylist
  * @typedef {{ media: Omit<HistoryMedia, 'media'> & { media: Media } }} PopulateMedia
@@ -61,8 +61,8 @@ class Booth {
     if (current && this.#timeout === null) {
       // Restart the advance timer after a server restart, if a track was
       // playing before the server restarted.
-      const duration = (current.media.end - current.media.start) * 1000;
-      const endTime = Number(current.playedAt) + duration;
+      const duration = (current.end - current.start) * 1000;
+      const endTime = Number(current.createdAt) + duration;
       if (endTime > Date.now()) {
         this.#timeout = setTimeout(
           () => this.#advanceAutomatically(),
@@ -94,7 +94,7 @@ class Booth {
   async getCurrentEntry() {
     const { db } = this.#uw;
 
-    const historyID = await this.#uw.redis.get('booth:historyID');
+    const historyID = /** @type {import('../schema').HistoryEntryID} */ (await this.#uw.redis.get('booth:historyID'));
     if (!historyID) {
       return null;
     }
@@ -137,7 +137,7 @@ class Booth {
         thumbnail: entry['media.thumbnail'],
         sourceID: entry['media.sourceID'],
         sourceType: entry['media.sourceType'],
-        sourceData: JSON.parse(entry['media.sourceData'] ?? '{}'),
+        sourceData: entry['media.sourceData'] ?? {},
       },
     } : null;
   }
@@ -145,7 +145,7 @@ class Booth {
   /**
    * Get vote counts for the currently playing media.
    *
-   * @returns {Promise<{ upvotes: string[], downvotes: string[], favorites: string[] }>}
+   * @returns {Promise<{ upvotes: UserID[], downvotes: UserID[], favorites: UserID[] }>}
    */
   async getCurrentVoteStats() {
     const { redis } = this.#uw;
@@ -158,9 +158,9 @@ class Booth {
     assert(results);
 
     const voteStats = {
-      upvotes: /** @type {string[]} */ (results[0][1]),
-      downvotes: /** @type {string[]} */ (results[1][1]),
-      favorites: /** @type {string[]} */ (results[2][1]),
+      upvotes: /** @type {UserID[]} */ (results[0][1]),
+      downvotes: /** @type {UserID[]} */ (results[1][1]),
+      favorites: /** @type {UserID[]} */ (results[2][1]),
     };
 
     return voteStats;
@@ -178,11 +178,10 @@ class Booth {
 
   /** @param {{ remove?: boolean }} options */
   async #getNextDJ(options) {
-    /** @type {string|null} */
-    let userID = await this.#uw.redis.lindex('waitlist', 0);
+    let userID = /** @type {UserID|null} */ (await this.#uw.redis.lindex('waitlist', 0));
     if (!userID && !options.remove) {
       // If the waitlist is empty, the current DJ will play again immediately.
-      userID = await this.#uw.redis.get('booth:currentDJ');
+      userID = /** @type {UserID|null} */ (await this.#uw.redis.get('booth:currentDJ'));
     }
     if (!userID) {
       return null;
@@ -219,7 +218,7 @@ class Booth {
     const entry = new HistoryEntry({
       user,
       playlist,
-      item: playlistItem._id,
+      item: playlistItem.id,
       media: {
         media: playlistItem.media,
         artist: playlistItem.artist,
@@ -244,7 +243,7 @@ class Booth {
       if (previous && !options.remove) {
         // The previous DJ should only be added to the waitlist again if it was
         // not empty. If it was empty, the previous DJ is already in the booth.
-        await this.#uw.redis.rpush('waitlist', previous.user.toString());
+        await this.#uw.redis.rpush('waitlist', previous.userID);
       }
     }
   }
@@ -302,7 +301,7 @@ class Booth {
   getMediaForPlayback(historyEntry) {
     return Object.assign(omit(historyEntry.media, 'sourceData'), {
       media: {
-        ...historyEntry.media.media.toJSON(),
+        ...historyEntry.media.media,
         sourceData: {
           ...historyEntry.media.media.sourceData,
           ...historyEntry.media.sourceData,
@@ -322,9 +321,8 @@ class Booth {
         historyID: next.id,
         userID: next.user.id,
         playlistID: next.playlist.id,
-        itemID: next.item.toString(),
         media: this.getMediaForPlayback(next),
-        playedAt: next.playedAt.getTime(),
+        playedAt: next.createdAt.getTime(),
       });
       this.#uw.publish('playlist:cycle', {
         userID: next.user.id,

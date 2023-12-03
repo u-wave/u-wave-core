@@ -3,7 +3,7 @@ import routes from '../routes/acl.js';
 
 /**
  * @typedef {import('../models/index.js').AclRole} AclRole
- * @typedef {import('../models/index.js').User} User
+ * @typedef {import('../schema.js').User} User
  * @typedef {{ roles: AclRole[] }} PopulateRoles
  * @typedef {Omit<AclRole, 'roles'> & PopulateRoles} PopulatedAclRole
  */

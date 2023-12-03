@@ -2,8 +2,12 @@ import { UserNotFoundError, CannotSelfMuteError } from '../errors/index.js';
 import toItemResponse from '../utils/toItemResponse.js';
 
 /**
+ * @typedef {import('../schema').UserID} UserID
+ */
+
+/**
  * @typedef {object} MuteUserParams
- * @prop {string} id
+ * @prop {UserID} id
  *
  * @typedef {object} MuteUserBody
  * @prop {number} time
@@ -32,7 +36,7 @@ async function muteUser(req) {
 
 /**
  * @typedef {object} UnmuteUserParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**
@@ -69,7 +73,7 @@ async function deleteAll(req) {
 
 /**
  * @typedef {object} DeleteByUserParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**

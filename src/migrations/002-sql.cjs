@@ -39,6 +39,7 @@ async function up({ context: uw }) {
     .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('next_playlist_item_index', 'integer', (col) => col.notNull().defaultTo(0))
     .execute();
 
   await db.schema.createTable('playlist_items')
@@ -49,6 +50,7 @@ async function up({ context: uw }) {
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('start', 'integer', (col) => col.notNull())
     .addColumn('end', 'integer', (col) => col.notNull())
+    .addColumn('order', 'integer', (col) => col.notNull())
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
     .execute();

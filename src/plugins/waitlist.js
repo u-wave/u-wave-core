@@ -15,7 +15,8 @@ const schema = JSON.parse(
 );
 
 /**
- * @typedef {import('../models/index.js').User} User
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
  *
  * @typedef {{ cycle: boolean, locked: boolean }} WaitlistSettings
  */
@@ -100,7 +101,7 @@ class Waitlist {
       schema['uw:key'],
       /**
        * @param {WaitlistSettings} _settings
-       * @param {string|null} userID
+       * @param {UserID|null} userID
        * @param {Partial<WaitlistSettings>} patch
        */
       (_settings, userID, patch) => {
@@ -129,11 +130,11 @@ class Waitlist {
    */
   async #hasPlayablePlaylist(user) {
     const { playlists } = this.#uw;
-    if (!user.activePlaylist) {
+    if (!user.activePlaylistID) {
       return false;
     }
 
-    const playlist = await playlists.getUserPlaylist(user, user.activePlaylist);
+    const playlist = await playlists.getUserPlaylist(user, user.activePlaylistID);
     return playlist && playlist.size > 0;
   }
 
@@ -164,10 +165,10 @@ class Waitlist {
   }
 
   /**
-   * @returns {Promise<string[]>}
+   * @returns {Promise<UserID[]>}
    */
   getUserIDs() {
-    return this.#uw.redis.lrange('waitlist', 0, -1);
+    return /** @type {Promise<UserID[]>} */ (this.#uw.redis.lrange('waitlist', 0, -1));
   }
 
   /**
@@ -175,7 +176,7 @@ class Waitlist {
    * adding someone else to the waitlist.
    * TODO maybe split this up and let http-api handle the difference
    *
-   * @param {string} userID
+   * @param {UserID} userID
    * @param {{moderator?: User}} [options]
    */
   async addUser(userID, options = {}) {
@@ -204,8 +205,7 @@ class Waitlist {
     }
 
     try {
-      /** @type {string[]} */
-      const waitlist = await this.#uw.redis['uw:addToWaitlist'](...ADD_TO_WAITLIST_SCRIPT.keys, user.id);
+      const waitlist = /** @type {UserID[]} */ (await this.#uw.redis['uw:addToWaitlist'](...ADD_TO_WAITLIST_SCRIPT.keys, user.id));
 
       if (isAddingOtherUser) {
         this.#uw.publish('waitlist:add', {
@@ -233,7 +233,7 @@ class Waitlist {
   }
 
   /**
-   * @param {string} userID
+   * @param {UserID} userID
    * @param {number} position
    * @param {{moderator: User}} options
    * @returns {Promise<void>}
@@ -241,7 +241,7 @@ class Waitlist {
   async moveUser(userID, position, { moderator }) {
     const { users } = this.#uw;
 
-    const user = await users.getUser(userID.toLowerCase());
+    const user = await users.getUser(userID);
     if (!user) {
       throw new UserNotFoundError({ id: userID });
     }
@@ -251,8 +251,7 @@ class Waitlist {
     }
 
     try {
-      /** @type {string[]} */
-      const waitlist = await this.#uw.redis['uw:moveWaitlist'](...MOVE_WAITLIST_SCRIPT.keys, user.id, position);
+      const waitlist = /** @type {UserID[]} */ (await this.#uw.redis['uw:moveWaitlist'](...MOVE_WAITLIST_SCRIPT.keys, user.id, position));
 
       this.#uw.publish('waitlist:move', {
         userID: user.id,
@@ -272,7 +271,7 @@ class Waitlist {
   }
 
   /**
-   * @param {string} userID
+   * @param {UserID} userID
    * @param {{moderator: User}} options
    * @returns {Promise<void>}
    */

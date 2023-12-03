@@ -7,10 +7,14 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
 /**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').MediaID} MediaID
+ * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
+ *
  * @typedef {import('../models/History.js').HistoryMedia} HistoryMedia
- * @typedef {import('../models/index.js').HistoryEntry} HistoryEntry
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Media} Media
+ * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').Media} Media
  * @typedef {{ media: Media }} PopulateMedia
  * @typedef {{ user: User }} PopulateUser
  * @typedef {HistoryMedia & PopulateMedia} PopulatedHistoryMedia
@@ -30,7 +34,7 @@ class HistoryRepository {
 
   /**
    * @param {{ offset?: number, limit?: number }} [pagination]
-   * @param {{ user?: string }} [options]
+   * @param {{ user?: UserID }} [options]
    * @returns {Promise<Page<PopulatedHistoryEntry, { offset: number, limit: number }>>}
    */
   async getHistory(pagination = {}, options = {}) {

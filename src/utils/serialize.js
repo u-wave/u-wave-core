@@ -1,30 +1,25 @@
 /**
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Playlist} Playlist
- * @typedef {import('../models/Playlist.js').LeanPlaylist} LeanPlaylist
- */
-
-/**
- * @param {Playlist | LeanPlaylist} model
+ * @param {import('../schema.js').Playlist} model
  */
 export function serializePlaylist(model) {
   return {
-    _id: 'id' in model ? model.id : model._id.toString(),
+    _id: model.id,
     name: model.name,
     author: model.userID,
     createdAt: model.createdAt.toISOString(),
-    description: model.description,
+    description: '',
     size: model.size,
   };
 }
 
 /**
- * @param {Pick<User, '_id' | 'username' | 'slug' | 'roles' | 'avatar' |
+ * @param {Pick<import('../schema.js').User,
+ *   'id' | 'username' | 'slug' | 'roles' | 'avatar' |
  *   'createdAt' | 'updatedAt' | 'lastSeenAt'>} model
  */
 export function serializeUser(model) {
   return {
-    _id: 'id' in model ? model.id : model._id.toString(),
+    _id: model.id,
     username: model.username,
     slug: model.slug,
     roles: model.roles,

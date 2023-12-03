@@ -1,8 +1,8 @@
 import { SourceNoImportError } from './errors/index.js';
 
 /**
- * @typedef {import('./models/index.js').User} User
- * @typedef {import('./models/index.js').Playlist} Playlist
+ * @typedef {import('./schema.js').User} User
+ * @typedef {import('./schema.js').Playlist} Playlist
  * @typedef {import('./plugins/playlists.js').PlaylistItemDesc} PlaylistItemDesc
  */
 

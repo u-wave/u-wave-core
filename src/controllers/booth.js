@@ -1,5 +1,4 @@
 import assert from 'node:assert';
-import mongoose from 'mongoose';
 import {
   HTTPError,
   PermissionError,
@@ -12,7 +11,12 @@ import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
 
-const { ObjectId } = mongoose.Types;
+/**
+ * @typedef {import('../schema').UserID} UserID
+ * @typedef {import('../schema').MediaID} MediaID
+ * @typedef {import('../schema').PlaylistID} PlaylistID
+ * @typedef {import('../schema').HistoryEntryID} HistoryEntryID
+ */
 
 /**
  * @param {import('../Uwave.js').default} uw
@@ -55,7 +59,7 @@ async function getBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @returns {Promise<string|null>}
+ * @returns {Promise<UserID|null>}
  */
 function getCurrentDJ(uw) {
   return uw.redis.get('booth:currentDJ');
@@ -63,8 +67,8 @@ function getCurrentDJ(uw) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {string|null} moderatorID - `null` if a user is skipping their own turn.
- * @param {string} userID
+ * @param {UserID|null} moderatorID - `null` if a user is skipping their own turn.
+ * @param {UserID} userID
  * @param {string|null} reason
  * @param {{ remove?: boolean }} [opts]
  */
@@ -82,12 +86,12 @@ async function doSkip(uw, moderatorID, userID, reason, opts = {}) {
 
 /**
  * @typedef {object} SkipUserAndReason
- * @prop {string} userID
+ * @prop {UserID} userID
  * @prop {string} reason
  *
  * @typedef {{
  *   remove?: boolean,
- *   userID?: string,
+ *   userID?: UserID,
  *   reason?: string,
  * } & (SkipUserAndReason | {})} SkipBoothBody
  */
@@ -127,7 +131,7 @@ async function skipBooth(req) {
 
 /**
  * @typedef {object} ReplaceBoothBody
- * @prop {string} userID
+ * @prop {UserID} userID
  */
 
 /**
@@ -161,7 +165,7 @@ async function replaceBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {string} userID
+ * @param {UserID} userID
  * @param {1|-1} direction
  */
 async function addVote(uw, userID, direction) {
@@ -190,7 +194,7 @@ async function addVote(uw, userID, direction) {
  * Old way of voting: over the WebSocket
  *
  * @param {import('../Uwave.js').default} uw
- * @param {string} userID
+ * @param {UserID} userID
  * @param {1|-1} direction
  */
 async function socketVote(uw, userID, direction) {
@@ -208,7 +212,7 @@ async function socketVote(uw, userID, direction) {
 
 /**
  * @typedef {object} GetVoteParams
- * @prop {string} historyID
+ * @prop {HistoryEntryID} historyID
  */
 
 /**
@@ -246,7 +250,7 @@ async function getVote(req) {
 
 /**
  * @typedef {object} VoteParams
- * @prop {string} historyID
+ * @prop {HistoryEntryID} historyID
  *
  * @typedef {object} VoteBody
  * @prop {1|-1} direction
@@ -285,8 +289,8 @@ async function vote(req) {
 
 /**
  * @typedef {object} FavoriteBody
- * @prop {string} playlistID
- * @prop {string} historyID
+ * @prop {PlaylistID} playlistID
+ * @prop {HistoryEntryID} historyID
  */
 
 /**
@@ -307,7 +311,7 @@ async function favorite(req) {
     throw new CannotSelfFavoriteError();
   }
 
-  const playlist = await uw.playlists.getUserPlaylist(user, new ObjectId(playlistID));
+  const playlist = await uw.playlists.getUserPlaylist(user, playlistID);
   if (!playlist) {
     throw new PlaylistNotFoundError({ id: playlistID });
   }
@@ -339,7 +343,7 @@ async function favorite(req) {
 
 /**
  * @typedef {object} GetRoomHistoryQuery
- * @prop {import('../types.js').PaginationQuery & { media?: string }} [filter]
+ * @prop {import('../types.js').PaginationQuery & { media?: MediaID }} [filter]
  */
 /**
  * @type {import('../types.js').Controller<never, GetRoomHistoryQuery, never>}

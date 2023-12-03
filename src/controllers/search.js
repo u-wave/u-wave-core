@@ -4,9 +4,11 @@ import toListResponse from '../utils/toListResponse.js';
 
 const { isEqual } = lodash;
 
-/** @typedef {import('mongodb').ObjectId} ObjectId */
-/** @typedef {import('../models/index.js').Playlist} Playlist */
-/** @typedef {import('../models/index.js').Media} Media */
+/** @typedef {import('../schema.js').UserID} UserID */
+/** @typedef {import('../schema.js').PlaylistID} PlaylistID */
+/** @typedef {import('../schema.js').MediaID} MediaID */
+/** @typedef {import('../schema.js').Playlist} Playlist */
+/** @typedef {import('../schema.js').Media} Media */
 /** @typedef {import('../plugins/playlists.js').PlaylistItemDesc} PlaylistItemDesc */
 
 // TODO should be deprecated once the Web client uses the better single-source route.
@@ -37,7 +39,7 @@ async function searchAll(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {Map<ObjectId, Media['sourceData']>} updates
+ * @param {Map<MediaID, Media['sourceData']>} updates
  */
 async function updateSourceData(uw, updates) {
   const { Media } = uw.models;
@@ -91,7 +93,7 @@ async function search(req) {
   // Track medias whose `sourceData` property no longer matches that from the source.
   // This can happen because the media was actually changed, but also because of new
   // features in the source implementation.
-  /** @type {Map<string, import('../schema.js').MediaTable['sourceData']>} */
+  /** @type {Map<MediaID, Media['sourceData']>} */
   const mediasNeedSourceDataUpdate = new Map();
 
   const mediasInSearchResults = await db.selectFrom('media')

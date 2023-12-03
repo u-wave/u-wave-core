@@ -1,5 +1,4 @@
 import { promisify } from 'node:util';
-import mongoose from 'mongoose';
 import lodash from 'lodash';
 import sjson from 'secure-json-parse';
 import { WebSocketServer } from 'ws';
@@ -15,10 +14,9 @@ import LostConnection from './sockets/LostConnection.js';
 import { serializeUser } from './utils/serialize.js';
 
 const { debounce, isEmpty } = lodash;
-const { ObjectId } = mongoose.mongo;
 
 /**
- * @typedef {import('./models/index.js').User} User
+ * @typedef {import('./schema.js').User} User
  */
 
 /**
@@ -206,7 +204,7 @@ class SocketServer {
       logout: (user, _, connection) => {
         this.replace(connection, this.createGuestConnection(connection.socket));
         if (!this.connection(user)) {
-          disconnectUser(this.#uw, user._id);
+          disconnectUser(this.#uw, user.id);
         }
       },
     };
@@ -231,7 +229,6 @@ class SocketServer {
           this.broadcast('advance', {
             historyID: next.historyID,
             userID: next.userID,
-            itemID: next.itemID,
             media: next.media,
             playedAt: new Date(next.playedAt).getTime(),
           });
@@ -452,8 +449,12 @@ class SocketServer {
    */
   async initLostConnections() {
     const { db, redis } = this.#uw;
-    const userIDs = await redis.lrange('users', 0, -1);
+    const userIDs = /** @type {import('./schema').UserID[]} */ (await redis.lrange('users', 0, -1));
     const disconnectedIDs = userIDs.filter((userID) => !this.connection(userID));
+
+    if (disconnectedIDs.length === 0) {
+      return;
+    }
 
     const disconnectedUsers = await db.selectFrom('users')
       .where('id', 'in', disconnectedIDs)
@@ -554,7 +555,7 @@ class SocketServer {
     connection.on('close', ({ banned }) => {
       if (banned) {
         this.#logger.info({ userId: user.id }, 'removing connection after ban');
-        disconnectUser(this.#uw, user._id);
+        disconnectUser(this.#uw, user.id);
       } else if (!this.#closing) {
         this.#logger.info({ userId: user.id }, 'lost connection');
         this.add(this.createLostConnection(user));
@@ -600,7 +601,7 @@ class SocketServer {
       // Only register that the user left if they didn't have another connection
       // still open.
       if (!this.connection(user)) {
-        disconnectUser(this.#uw, user._id);
+        disconnectUser(this.#uw, user.id);
       }
     });
     return connection;

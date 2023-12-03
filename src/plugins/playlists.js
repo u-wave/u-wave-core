@@ -13,15 +13,18 @@ import { randomUUID } from 'node:crypto';
 const { groupBy, shuffle } = lodash;
 
 /**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').MediaID} MediaID
+ * @typedef {import('../schema.js').PlaylistID} PlaylistID
+ * @typedef {import('../schema.js').PlaylistItemID} PlaylistItemID
+ *
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').Playlist} Playlist
+ * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
+ * @typedef {import('../schema.js').Media} Media
+ *
  * @typedef {import('mongoose').PipelineStage} PipelineStage
  * @typedef {import('mongoose').PipelineStage.Facet['$facet'][string]} FacetPipelineStage
- * @typedef {import('mongodb').ObjectId} ObjectId
- * @typedef {Awaited<ReturnType< import('./users.js').UsersRepository['getUser'] >> & {}} User
- * @typedef {import('../models/index.js').Playlist} Playlist
- * @typedef {import('../models/Playlist.js').LeanPlaylist} LeanPlaylist
- * @typedef {import('../models/index.js').PlaylistItem} PlaylistItem
- * @typedef {import('../models/index.js').Media} Media
- * @typedef {{ media: Media }} PopulateMedia
  */
 
 /**
@@ -96,7 +99,7 @@ class PlaylistsRepository {
 
   /**
    * @param {User} user
-   * @param {string} id
+   * @param {PlaylistID} id
    */
   async getUserPlaylist(user, id) {
     const { db } = this.#uw;
@@ -129,7 +132,7 @@ class PlaylistsRepository {
    */
   async createPlaylist(user, { name }) {
     const { db } = this.#uw;
-    const id = randomUUID();
+    const id = /** @type {PlaylistID} */ (randomUUID());
 
     const playlist = await db.insertInto('playlists')
       .values({
@@ -172,7 +175,7 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @param {object} patch
+   * @param {Partial<Playlist>} patch
    * @returns {Promise<Playlist>}
    */
   // eslint-disable-next-line class-methods-use-this
@@ -195,25 +198,26 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @returns {Promise<void>}
    */
-  // eslint-disable-next-line class-methods-use-this
   async deletePlaylist(playlist) {
-    await playlist.deleteOne();
+    const { db } = this.#uw;
+
+    await db.deleteFrom('playlists')
+      .where('id', '=', playlist.id)
+      .execute();
   }
 
   /**
    * @param {Playlist} playlist
-   * @param {ObjectId} itemID
-   * @returns {Promise<PlaylistItem & PopulateMedia>}
+   * @param {PlaylistItemID} itemID
    */
   async getPlaylistItem(playlist, itemID) {
     const { PlaylistItem } = this.#uw.models;
 
-    const playlistItemID = playlist.media.find((id) => id.equals(itemID));
+    const playlistItemID = playlist.media.find((id) => id === itemID);
 
     if (!playlistItemID) {
-      throw new ItemNotInPlaylistError({ playlistID: playlist._id, itemID });
+      throw new ItemNotInPlaylistError({ playlistID: playlist.id, itemID });
     }
 
     const item = await PlaylistItem.findById(playlistItemID);
@@ -225,13 +229,11 @@ class PlaylistsRepository {
       await item.populate('media');
     }
 
-    // @ts-expect-error TS2322: The types of `media` are incompatible, but we just populated it,
-    // typescript just doesn't know about that.
     return item;
   }
 
   /**
-   * @param {{ id: string }} playlist
+   * @param {{ id: PlaylistID }} playlist
    * @param {string|undefined} filter
    * @param {{ offset: number, limit: number }} pagination
    */
@@ -327,10 +329,10 @@ class PlaylistsRepository {
    * Get playlists containing a particular Media.
    *
    * @typedef {object} GetPlaylistsContainingMediaOptions
-   * @prop {string} [author]
+   * @prop {UserID} [author]
    * @prop {string[]} [fields]
    *
-   * @param {string} mediaID
+   * @param {MediaID} mediaID
    * @param {GetPlaylistsContainingMediaOptions} options
    */
   async getPlaylistsContainingMedia(mediaID, options = {}) {
@@ -353,8 +355,8 @@ class PlaylistsRepository {
    * Get playlists that contain any of the given medias. If multiple medias are in a single
    * playlist, that playlist will be returned multiple times, keyed on the media's unique ObjectId.
    *
-   * @param {string[]} mediaIDs
-   * @param {{ author?: string }} options
+   * @param {MediaID[]} mediaIDs
+   * @param {{ author?: UserID }} options
    * @returns A map of stringified `Media` `ObjectId`s to the Playlist objects that contain them.
    */
   async getPlaylistsContainingAnyMedia(mediaIDs, options = {}) {
@@ -459,18 +461,18 @@ class PlaylistsRepository {
    *
    * @param {Playlist} playlist
    * @param {PlaylistItemDesc[]} items
-   * @param {{ after?: ObjectId|null }} options
+   * @param {{ after?: PlaylistItemID|null }} options
    * @returns {Promise<{
    *   added: PlaylistItem[],
-   *   afterID: ObjectId?,
+   *   afterID: PlaylistItemID?,
    *   playlistSize: number,
    * }>}
    */
   async addPlaylistItems(playlist, items, { after = null } = {}) {
     const { users } = this.#uw;
-    const user = await users.getUser(playlist.author);
+    const user = await users.getUser(playlist.userID);
     if (!user) {
-      throw new UserNotFoundError({ id: playlist.author });
+      throw new UserNotFoundError({ id: playlist.userID });
     }
 
     const newItems = await this.createPlaylistItems(user, items);
@@ -478,7 +480,7 @@ class PlaylistsRepository {
     const insertIndex = after === null ? -1 : oldMedia.findIndex((item) => item.equals(after));
     playlist.media = [
       ...oldMedia.slice(0, insertIndex + 1),
-      ...newItems.map((item) => item._id),
+      ...newItems.map((item) => item.id),
       ...oldMedia.slice(insertIndex + 1),
     ];
 
@@ -505,8 +507,8 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @param {ObjectId[]} itemIDs
-   * @param {{ afterID: ObjectId? }} options
+   * @param {PlaylistItemID[]} itemIDs
+   * @param {{ afterID: PlaylistItemID? }} options
    */
   // eslint-disable-next-line class-methods-use-this
   async movePlaylistItems(playlist, itemIDs, { afterID }) {
@@ -534,16 +536,16 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @param {ObjectId[]} itemIDs
+   * @param {PlaylistItemID[]} itemIDs
    */
   async removePlaylistItems(playlist, itemIDs) {
     const { PlaylistItem } = this.#uw.models;
 
     // Only remove items that are actually in this playlist.
     const stringIDs = new Set(itemIDs.map((item) => String(item)));
-    /** @type {ObjectId[]} */
+    /** @type {PlaylistItemID[]} */
     const toRemove = [];
-    /** @type {ObjectId[]} */
+    /** @type {PlaylistItemID[]} */
     const toKeep = [];
     playlist.media.forEach((itemID) => {
       if (stringIDs.has(`${itemID}`)) {

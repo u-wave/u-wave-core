@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import routes from '../routes/chat.js';
 
 /**
- * @typedef {import('../models/index.js').User} User
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
  *
  * @typedef {object} ChatOptions
  * @prop {number} maxLength
@@ -101,7 +102,7 @@ class Chat {
   }
 
   /**
-   * @param {{ id: string } | { userID: string } | {}} filter
+   * @param {{ id: string } | { userID: UserID } | {}} filter
    * @param {{ moderator: User }} options
    */
   delete(filter, options) {

@@ -2,6 +2,10 @@ import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 
 /**
+ * @typedef {import('../schema.js').UserID} UserID
+ */
+
+/**
  * @type {import('../types.js').Controller}
  */
 async function getWaitlist(req) {
@@ -14,7 +18,7 @@ async function getWaitlist(req) {
 
 /**
  * @typedef {object} AddToWaitlistBody
- * @prop {string} userID
+ * @prop {UserID} userID
  */
 
 /**
@@ -37,7 +41,7 @@ async function addToWaitlist(req) {
 
 /**
  * @typedef {object} MoveWaitlistBody
- * @prop {string} userID
+ * @prop {UserID} userID
  * @prop {number} position
  */
 
@@ -58,7 +62,7 @@ async function moveWaitlist(req) {
 
 /**
  * @typedef {object} RemoveFromWaitlistParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**

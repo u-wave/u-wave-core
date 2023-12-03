@@ -6,8 +6,7 @@ import Page from '../Page.js';
 const { clamp, omit } = lodash;
 
 /**
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/User.js').LeanUser} LeanUser
+ * @typedef {import('../schema.js').User} User
  * @typedef {import('../models/User.js').LeanBanned} LeanBanned
  * @typedef {LeanBanned & { user: Omit<LeanUser, 'banned'> }} Ban
  */
@@ -141,7 +140,7 @@ class Bans {
   }
 
   /**
-   * @param {string} userID
+   * @param {import('../schema.js').UserID} userID
    * @param {object} options
    * @param {User} options.moderator
    */

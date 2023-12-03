@@ -7,7 +7,7 @@ function getCurrentDJ(uw) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {import('mongodb').ObjectId} userID
+ * @param {import('../schema.js').UserID} userID
  */
 async function skipIfCurrentDJ(uw, userID) {
   const currentDJ = await getCurrentDJ(uw);
