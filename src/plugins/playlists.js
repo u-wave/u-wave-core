@@ -1,4 +1,5 @@
 import lodash from 'lodash';
+import ObjectGroupBy from 'object.groupby';
 import {
   PlaylistNotFoundError,
   PlaylistItemNotFoundError,
@@ -10,7 +11,7 @@ import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 
-const { groupBy, shuffle } = lodash;
+const { shuffle } = lodash;
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -404,7 +405,7 @@ class PlaylistsRepository {
 
     // Group by source so we can retrieve all unknown medias from the source in
     // one call.
-    const itemsBySourceType = groupBy(items, 'sourceType');
+    const itemsBySourceType = ObjectGroupBy(items, (item) => item.sourceType);
     /** @type {{ mediaID: MediaID, artist: string, title: string, start: number, end: number }[]} */
     const playlistItems = [];
     const promises = Object.entries(itemsBySourceType).map(async ([sourceType, sourceItems]) => {
