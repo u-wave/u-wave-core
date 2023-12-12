@@ -66,6 +66,7 @@ export interface PlaylistItemTable {
   title: string,
   start: number,
   end: number,
+  order: number,
   createdAt: Generated<Date>,
   updatedAt: Generated<Date>,
 }

@@ -103,6 +103,7 @@ class Booth {
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
       .select([
         'historyEntries.id as id',
+        'historyEntries.userID as userID',
         'media.id as media.id',
         'media.sourceID as media.sourceID',
         'media.sourceType as media.sourceType',
@@ -123,6 +124,7 @@ class Booth {
 
     return entry ? {
       _id: entry.id,
+      userID: entry.userID,
       artist: entry.artist,
       title: entry.title,
       start: entry.start,
@@ -192,10 +194,8 @@ class Booth {
 
   /**
    * @param {{ remove?: boolean }} options
-   * @returns {Promise<PopulatedHistoryEntry | null>}
    */
   async #getNextEntry(options) {
-    const { HistoryEntry, PlaylistItem } = this.#uw.models;
     const { playlists } = this.#uw;
 
     const user = await this.#getNextDJ(options);
@@ -207,33 +207,20 @@ class Booth {
       throw new EmptyPlaylistError();
     }
 
-    const playlistItem = await PlaylistItem.findById(playlist.media[0]);
+    const playlistItem = await playlists.getPlaylistItemAt(playlist, 0);
     if (!playlistItem) {
-      throw new PlaylistItemNotFoundError({ id: playlist.media[0] });
+      throw new PlaylistItemNotFoundError();
     }
 
-    /** @type {PopulatedHistoryEntry} */
-    // @ts-expect-error TS2322: `user` and `playlist` are already populated,
-    // and `media.media` is populated immediately below.
-    const entry = new HistoryEntry({
+    return {
       user,
-      playlist,
-      item: playlistItem.id,
-      media: {
-        media: playlistItem.media,
-        artist: playlistItem.artist,
-        title: playlistItem.title,
-        start: playlistItem.start,
-        end: playlistItem.end,
-      },
-    });
-    await entry.populate('media.media');
-
-    return entry;
+      media: playlistItem,
+      sourceData: null,
+    };
   }
 
   /**
-   * @param {HistoryEntry|null} previous
+   * @param {{ userID: UserID }|null} previous
    * @param {{ remove?: boolean }} options
    */
   async #cycleWaitlist(previous, options) {
@@ -335,7 +322,7 @@ class Booth {
   }
 
   /**
-   * @param {PopulatedHistoryEntry} entry
+   * @param {{ user: User, media: { media: { sourceID: string, sourceType: string } } }} entry
    */
   async #getSourceDataForPlayback(entry) {
     const { sourceID, sourceType } = entry.media.media;
@@ -405,7 +392,7 @@ class Booth {
 
     if (next) {
       this.#logger.info({
-        id: next._id,
+        id: next.media._id,
         artist: next.media.artist,
         title: next.media.title,
       }, 'next track');

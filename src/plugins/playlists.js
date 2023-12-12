@@ -2,7 +2,6 @@ import lodash from 'lodash';
 import ObjectGroupBy from 'object.groupby';
 import {
   PlaylistNotFoundError,
-  PlaylistItemNotFoundError,
   ItemNotInPlaylistError,
   MediaNotFoundError,
   UserNotFoundError,
@@ -10,6 +9,7 @@ import {
 import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
+import { sql } from 'kysely';
 
 const { shuffle } = lodash;
 
@@ -85,6 +85,59 @@ function toPlaylistItem(itemProps, media) {
   };
 }
 
+const playlistItemSelection = /** @type {const} */ ([
+  'playlistItems.id as id',
+  'media.id as media.id',
+  'media.sourceID as media.sourceID',
+  'media.sourceType as media.sourceType',
+  'media.sourceData as media.sourceData',
+  'media.artist as media.artist',
+  'media.title as media.title',
+  'media.duration as media.duration',
+  'media.thumbnail as media.thumbnail',
+  'playlistItems.artist',
+  'playlistItems.title',
+  'playlistItems.start',
+  'playlistItems.end',
+])
+
+/**
+ * @param {{
+ *   id: PlaylistItemID,
+ *   'media.id': MediaID,
+ *   'media.sourceID': string,
+ *   'media.sourceType': string,
+ *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.artist': string,
+ *   'media.title': string,
+ *   'media.duration': number,
+ *   'media.thumbnail': string,
+ *   artist: string,
+ *   title: string,
+ *   start: number,
+ *   end: number,
+ * }} raw
+ */
+function playlistItemFromSelection (raw) {
+  return {
+    _id: raw.id,
+    artist: raw.artist,
+    title: raw.title,
+    start: raw.start,
+    end: raw.end,
+    media: {
+      _id: raw['media.id'],
+      artist: raw['media.artist'],
+      title: raw['media.title'],
+      duration: raw['media.duration'],
+      thumbnail: raw['media.thumbnail'],
+      sourceID: raw['media.sourceID'],
+      sourceType: raw['media.sourceType'],
+      sourceData: raw['media.sourceData'],
+    },
+  }
+}
+
 class PlaylistsRepository {
   #uw;
 
@@ -112,9 +165,11 @@ class PlaylistsRepository {
       .groupBy('playlists.id')
       .select([
         'playlists.id',
-        'name',
-        db.fn.countAll().as('size'),
+        'playlists.userID',
+        'playlists.name',
         'playlists.createdAt',
+        'playlists.updatedAt',
+        db.fn.countAll().as('size'),
       ])
       .executeTakeFirst();
 
@@ -188,13 +243,25 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @returns {Promise<Playlist>}
    */
-  // eslint-disable-next-line class-methods-use-this
   async shufflePlaylist(playlist) {
-    playlist.media = shuffle(playlist.media);
-    await playlist.save();
-    return playlist;
+    const { db } = this.#uw;
+
+    const previousOrder = await db.selectFrom('playlistItems')
+      .where('playlistID', '=', playlist.id)
+      .select(['id'])
+      .orderBy('order', 'asc')
+      .execute();
+
+    const newOrder = shuffle(previousOrder);
+    await db.transaction().execute(async (tx) => {
+      await Promise.all(newOrder.map((item, order) => (
+        tx.updateTable('playlistItems')
+          .where('id', '=', item.id)
+          .set({ order })
+          .executeTakeFirst()
+      )));
+    });
   }
 
   /**
@@ -213,24 +280,41 @@ class PlaylistsRepository {
    * @param {PlaylistItemID} itemID
    */
   async getPlaylistItem(playlist, itemID) {
-    const { PlaylistItem } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const playlistItemID = playlist.media.find((id) => id === itemID);
+    const raw = await db.selectFrom('playlistItems')
+      .where('playlistItems.id', '=', itemID)
+      .where('playlistItems.playlistID', '=', playlist.id)
+      .innerJoin('media', 'media.id', 'playlistItems.mediaID')
+      .select(playlistItemSelection)
+      .executeTakeFirst();
 
-    if (!playlistItemID) {
+    if (raw == null) {
       throw new ItemNotInPlaylistError({ playlistID: playlist.id, itemID });
     }
 
-    const item = await PlaylistItem.findById(playlistItemID);
-    if (!item) {
-      throw new PlaylistItemNotFoundError({ id: playlistItemID });
+    return playlistItemFromSelection(raw)
+  }
+
+  /**
+   * @param {Playlist} playlist
+   * @param {number} order
+   */
+  async getPlaylistItemAt(playlist, order) {
+    const { db } = this.#uw;
+
+    const raw = await db.selectFrom('playlistItems')
+      .where('playlistItems.playlistID', '=', playlist.id)
+      .where('playlistItems.order', '=', order)
+      .innerJoin('media', 'media.id', 'playlistItems.mediaID')
+      .select(playlistItemSelection)
+      .executeTakeFirst();
+
+    if (raw == null) {
+      throw new ItemNotInPlaylistError({ playlistID: playlist.id });
     }
 
-    if (!item.populated('media')) {
-      await item.populate('media');
-    }
-
-    return item;
+    return playlistItemFromSelection(raw)
   }
 
   /**
@@ -244,21 +328,7 @@ class PlaylistsRepository {
     let query = db.selectFrom('playlistItems')
       .where('playlistID', '=', playlist.id)
       .innerJoin('media', 'playlistItems.mediaID', 'media.id')
-      .select([
-        'playlistItems.id as id',
-        'media.id as media.id',
-        'media.sourceID as media.sourceID',
-        'media.sourceType as media.sourceType',
-        'media.sourceData as media.sourceData',
-        'media.artist as media.artist',
-        'media.title as media.title',
-        'media.duration as media.duration',
-        'media.thumbnail as media.thumbnail',
-        'playlistItems.artist',
-        'playlistItems.title',
-        'playlistItems.start',
-        'playlistItems.end',
-      ]);
+      .select(playlistItemSelection);
     if (filter != null) {
       query = query.where('playlistItems.artist', 'like', filter)
         .orWhere('playlistItems.title', 'like', filter);
@@ -278,6 +348,8 @@ class PlaylistsRepository {
       .where('playlistItems.artist', 'like', filter)
       .orWhere('playlistItems.artist', 'like', filter);
 
+    query = query.orderBy('playlistItems.order', 'asc');
+
     const [
       playlistItemsRaw,
       filtered,
@@ -288,25 +360,7 @@ class PlaylistsRepository {
       totalQuery.executeTakeFirstOrThrow(),
     ]);
 
-    const playlistItems = playlistItemsRaw.map((raw) => {
-      return {
-        _id: raw.id,
-        artist: raw.artist,
-        title: raw.title,
-        start: raw.start,
-        end: raw.end,
-        media: {
-          _id: raw['media.id'],
-          artist: raw['media.artist'],
-          title: raw['media.title'],
-          duration: raw['media.duration'],
-          thumbnail: raw['media.thumbnail'],
-          sourceID: raw['media.sourceID'],
-          sourceType: raw['media.sourceType'],
-          sourceData: raw['media.sourceData'],
-        },
-      }
-    })
+    const playlistItems = playlistItemsRaw.map(playlistItemFromSelection)
 
     // `items` is the same shape as a PlaylistItem instance!
     return new Page(playlistItems, {
@@ -530,27 +584,40 @@ class PlaylistsRepository {
   /**
    * @param {Playlist} playlist
    * @param {PlaylistItemID[]} itemIDs
-   * @param {{ afterID: PlaylistItemID? }} options
+   * @param {{ afterID: PlaylistItemID | null }} options
    */
   // eslint-disable-next-line class-methods-use-this
   async movePlaylistItems(playlist, itemIDs, { afterID }) {
-    // Use a plain array instead of a mongoose array because we need `splice()`.
-    const itemsInPlaylist = [...playlist.media];
-    const itemIDsInPlaylist = new Set(itemsInPlaylist.map((item) => `${item}`));
-    // Only attempt to move items that are actually in the playlist.
-    const itemIDsToInsert = itemIDs.filter((id) => itemIDsInPlaylist.has(id));
+    const { db } = this.#uw;
 
-    // Remove the items that we are about to move.
-    // TODO use Set
-    const newMedia = itemsInPlaylist.filter((item) => !itemIDsToInsert.includes(item));
-    // Reinsert items at their new position.
-    const insertIndex = afterID
-      ? newMedia.findIndex((item) => item.equals(afterID))
-      : -1;
-    newMedia.splice(insertIndex + 1, 0, ...itemIDsToInsert);
-    playlist.media = newMedia;
+    const distance = itemIDs.length;
+    await db.transaction().execute(async (tx) => {
+      let query = tx.updateTable('playlistItems')
+        .where('playlistID', '=', playlist.id)
+        .where('id', 'not in', itemIDs)
+        .set({ order: (eb) => sql`${eb.ref('order')} + ${distance}` });
+      if (afterID) {
+        query = query.where('order', '>', (eb) => (
+          eb.selectFrom('playlistItems').where('id', '=', afterID).select('order')
+        ));
+      }
 
-    await playlist.save();
+      query = query.returning([
+        afterID ? ((eb) => eb.selectFrom('playlistItems')
+          .where('id', '=', afterID)
+          .select('order')
+          .as('insertAt')) : sql`0`.as('insertAt'),
+      ]);
+
+      const { insertAt } = await query.executeTakeFirstOrThrow();
+
+      await Promise.all(itemIDs.map((playlistItemID, order) => (
+        tx.updateTable('playlistItems')
+          .where('id', '=', playlistItemID)
+          .set({ order: insertAt + order })
+          .executeTakeFirst()
+      )));
+    });
 
     return {};
   }

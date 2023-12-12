@@ -28,7 +28,7 @@ async function up({ context: uw }) {
           createdAt: media.createdAt,
           updatedAt: media.updatedAt,
         })
-        .onConflict((conflict) => conflict.constraint('source_key').doUpdateSet({
+        .onConflict((conflict) => conflict.constraint('media_source_key').doUpdateSet({
           updatedAt: (eb) => eb.ref('EXCLUDED.updatedAt'),
         }))
         .execute();
@@ -64,6 +64,7 @@ async function up({ context: uw }) {
           })
           .execute();
 
+        let order = 0;
         for (const itemMongoID of playlist.media) {
           const itemID = randomUUID();
           idMap.set(itemMongoID.toString(), itemID);
@@ -78,10 +79,13 @@ async function up({ context: uw }) {
               title: item.title,
               start: item.start,
               end: item.end,
+              order,
               createdAt: item.createdAt,
               updatedAt: item.updatedAt,
             })
             .execute();
+
+          order += 1;
         }
       }
     }

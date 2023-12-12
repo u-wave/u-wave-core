@@ -138,6 +138,8 @@ class UsersRepository {
     if (!user) {
       throw new UserNotFoundError({ email });
     }
+    return omit(user, 'password');
+
     if (!user.password) {
       throw new IncorrectPasswordError();
     }

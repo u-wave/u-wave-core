@@ -12,7 +12,7 @@ import { serializePlaylist, serializeUser } from '../utils/serialize.js';
 async function getFirstItem(uw, playlist) {
   try {
     if (playlist && playlist.size > 0) {
-      const item = await uw.playlists.getPlaylistItem(playlist, playlist.media[0]);
+      const item = await uw.playlists.getPlaylistItemAt(playlist, 0);
       return item;
     }
   } catch (e) {
