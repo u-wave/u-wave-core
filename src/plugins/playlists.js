@@ -23,9 +23,6 @@ const { shuffle } = lodash;
  * @typedef {import('../schema.js').Playlist} Playlist
  * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
  * @typedef {import('../schema.js').Media} Media
- *
- * @typedef {import('mongoose').PipelineStage} PipelineStage
- * @typedef {import('mongoose').PipelineStage.Facet['$facet'][string]} FacetPipelineStage
  */
 
 /**
@@ -237,8 +234,31 @@ class PlaylistsRepository {
   // eslint-disable-next-line class-methods-use-this
   async updatePlaylist(playlist, patch = {}) {
     Object.assign(playlist, patch);
-    await playlist.save();
+    throw new Error('unimplemented');
+    // await playlist.save();
     return playlist;
+  }
+
+  /**
+   * @param {Playlist} playlist
+   */
+  async cyclePlaylist(playlist) {
+    const { db } = this.#uw;
+
+    await db.updateTable('playlistItems')
+      .where('playlistID', '=', playlist.id)
+      .where('order', '=', 0)
+      .set({
+        order: (eb) => eb.selectFrom('playlistItems')
+          .where('playlistID', '=', playlist.id)
+          .select((eb) => sql`${eb.fn.max('order')} + 1`.as('max')),
+      })
+      .execute()
+
+    await db.updateTable('playlistItems')
+      .where('playlistID', '=', playlist.id)
+      .set({ order: sql`order - 1` })
+      .execute()
   }
 
   /**

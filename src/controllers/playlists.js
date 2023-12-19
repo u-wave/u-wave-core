@@ -1,12 +1,9 @@
-import mongoose from 'mongoose';
 import { HTTPError, PlaylistNotFoundError, PlaylistItemNotFoundError } from '../errors/index.js';
 import { serializePlaylist } from '../utils/serialize.js';
 import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
-
-const { ObjectId } = mongoose.mongo;
 
 /**
  * @typedef {import('../schema').PlaylistID} PlaylistID
@@ -275,7 +272,7 @@ async function addPlaylistItems(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  /** @type {import('mongodb').ObjectId|null} */
+  /** @type {PlaylistItemID|null} */
   let afterID = null;
   if (at === 'start') {
     afterID = null;

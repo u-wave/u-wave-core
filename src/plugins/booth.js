@@ -14,11 +14,6 @@ const { omit } = lodash;
  * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
  * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
  * @typedef {import('../schema.js').Media} Media
- * @typedef {{ user: User }} PopulateUser
- * @typedef {{ playlist: Playlist }} PopulatePlaylist
- * @typedef {{ media: Omit<HistoryMedia, 'media'> & { media: Media } }} PopulateMedia
- * @typedef {Omit<HistoryEntry, 'user' | 'playlist' | 'media'>
- *     & PopulateUser & PopulatePlaylist & PopulateMedia} PopulatedHistoryEntry
  */
 
 /**
@@ -353,6 +348,8 @@ class Booth {
    * @returns {Promise<PopulatedHistoryEntry|null>}
    */
   async #advanceLocked(opts = {}) {
+    const { playlists } = this.#uw
+
     const publish = opts.publish ?? true;
     const remove = opts.remove || (
       !await this.#uw.waitlist.isCycleEnabled()
@@ -409,7 +406,7 @@ class Booth {
 
     if (next) {
       await this.#update(next);
-      await cyclePlaylist(next.playlist);
+      await playlists.cyclePlaylist(next.playlist);
       this.#play(next);
     } else {
       await this.clear();

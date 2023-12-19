@@ -95,8 +95,13 @@ export interface ConfigurationTable {
   value: JsonObject | null,
 }
 
+export interface MigrationTable {
+  name: string,
+}
+
 export interface Database {
   configuration: ConfigurationTable,
+  migrations: MigrationTable,
   media: MediaTable,
   users: UserTable,
   authServices: AuthServiceTable,

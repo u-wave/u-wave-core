@@ -1,7 +1,6 @@
 /* eslint-disable node/no-missing-import,node/no-unpublished-import */
 // This file contains supporting types that can't be expressed in JavaScript/JSDoc.
 
-import type { Model } from 'mongoose';
 import type { ParsedQs } from 'qs';
 import type { JsonObject } from 'type-fest';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
@@ -83,12 +82,6 @@ export type AuthenticatedController<
   TQuery = DefaultQuery,
   TBody = DefaultBody,
 > = (req: AuthenticatedRequest<TParams, TQuery, TBody>, res: ExpressResponse) => Promise<object>;
-
-/**
- * Utility type that returns a Document<TSchema> given a Model<Document<TSchema>>.
- */
-export type ToDocument<TModel extends Model<unknown>> =
-  TModel extends Model<infer TDoc> ? TDoc : never;
 
 type LegacyPaginationQuery = { page?: string, limit?: string };
 type OffsetPaginationQuery = {

@@ -46,6 +46,59 @@ const mongooseStorage = {
   },
 };
 
+const kyselyStorage = {
+  /**
+   * @param {import('umzug').MigrationParams<Uwave>} params
+   */
+  async logMigration({ name, context: uw }) {
+    const { db } = uw;
+
+    await db.insertInto('migrations')
+      .values({ name })
+      .execute();
+  },
+
+  /**
+   * @param {import('umzug').MigrationParams<Uwave>} params
+   */
+  async unlogMigration({ name, context: uw }) {
+    const { db } = uw;
+
+    await db.deleteFrom('migrations')
+      .where('name', '=', name)
+      .execute();
+  },
+
+  /**
+   * @param {{ context: Uwave }} params
+   */
+  async executed({ context: uw }) {
+    const { db } = uw;
+    const rows = await db.selectFrom('migrations').select(['name']).execute();
+
+    return rows.map((row) => row.name);
+  },
+};
+
+const storage = {
+  logMigration: kyselyStorage.logMigration,
+  /**
+   * @param {import('umzug').MigrationParams<Uwave>} params
+   */
+  async unlogMigration(params) {
+    await kyselyStorage.unlogMigration(params);
+    await mongooseStorage.unlogMigration(params);
+  },
+  /**
+   * @param {{ context: Uwave }} params
+   */
+  async executed(params) {
+    const kyselyRows = await kyselyStorage.executed(params);
+    const mongooseRows = await mongooseStorage.executed(params);
+    return [...mongooseRows, ...kyselyRows];
+  },
+};
+
 /**
  * @typedef {import('umzug').InputMigrations<Uwave>} MigrateOptions
  * @typedef {(opts: MigrateOptions) => Promise<void>} Migrate
@@ -62,7 +115,7 @@ async function migrationsPlugin(uw) {
     const migrator = new Umzug({
       migrations,
       context: uw,
-      storage: mongooseStorage,
+      storage,
       logger: uw.logger.child({ ns: 'uwave:migrations' }),
     });
 

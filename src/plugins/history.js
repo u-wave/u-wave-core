@@ -11,15 +11,9 @@ const MAX_PAGE_SIZE = 100;
  * @typedef {import('../schema.js').MediaID} MediaID
  * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
  *
- * @typedef {import('../models/History.js').HistoryMedia} HistoryMedia
  * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
  * @typedef {import('../schema.js').User} User
  * @typedef {import('../schema.js').Media} Media
- * @typedef {{ media: Media }} PopulateMedia
- * @typedef {{ user: User }} PopulateUser
- * @typedef {HistoryMedia & PopulateMedia} PopulatedHistoryMedia
- * @typedef {{ media: PopulatedHistoryMedia }} PopulateHistoryMedia
- * @typedef {HistoryEntry & PopulateUser & PopulateHistoryMedia} PopulatedHistoryEntry
  */
 
 class HistoryRepository {

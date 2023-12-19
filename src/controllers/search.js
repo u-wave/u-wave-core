@@ -41,21 +41,16 @@ async function searchAll(req) {
  * @param {import('../Uwave.js').default} uw
  * @param {Map<MediaID, Media['sourceData']>} updates
  */
-async function updateSourceData(uw, updates) {
-  const { Media } = uw.models;
-  const ops = [];
-  uw.logger.debug({ ns: 'uwave:search', forMedia: [...updates.keys()] }, 'updating source data');
-  for (const [id, sourceData] of updates.entries()) {
-    ops.push({
-      updateOne: {
-        filter: { _id: id },
-        update: {
-          $set: { sourceData },
-        },
-      },
-    });
-  }
-  await Media.bulkWrite(ops);
+function updateSourceData(uw, updates) {
+  return uw.db.transaction().execute(async (tx) => {
+    uw.logger.debug({ ns: 'uwave:search', forMedia: [...updates.keys()] }, 'updating source data');
+    for (const [id, sourceData] of updates.entries()) {
+      await tx.updateTable('media')
+        .where('id', '=', id)
+        .set({ sourceData })
+        .executeTakeFirst();
+    }
+  });
 }
 
 /**
