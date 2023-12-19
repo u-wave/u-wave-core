@@ -90,7 +90,13 @@ export interface HistoryEntryTable {
   updatedAt: Generated<Date>,
 }
 
+export interface ConfigurationTable {
+  name: string,
+  value: JsonObject | null,
+}
+
 export interface Database {
+  configuration: ConfigurationTable,
   media: MediaTable,
   users: UserTable,
   authServices: AuthServiceTable,

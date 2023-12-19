@@ -13,6 +13,13 @@ async function up({ context: uw }) {
   const idMap = new Map();
 
   await db.transaction().execute(async (tx) => {
+    for await (const config of models.Config.find().lean()) {
+      const { _id: name, ...value } = config;
+      await tx.insertInto('configuration')
+        .values({ name, value })
+        .execute();
+    }
+
     for await (const media of models.Media.find().lean()) {
       const id = randomUUID();
       await tx.insertInto('media')

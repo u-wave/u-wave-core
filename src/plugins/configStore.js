@@ -10,6 +10,7 @@ import ValidationError from '../errors/ValidationError.js';
 const { omit } = lodash;
 
 /**
+ * @typedef {import('type-fest').JsonObject} JsonObject
  * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('../schema.js').User} User
  */
@@ -93,7 +94,7 @@ class ConfigStore {
   }
 
   /**
-   * @template {object} TSettings
+   * @template {JsonObject} TSettings
    * @param {string} key
    * @param {(settings: TSettings, user: UserID|null, patch: Partial<TSettings>) => void} listener
    */
@@ -103,34 +104,46 @@ class ConfigStore {
   }
 
   /**
-   * @param {string} key
-   * @param {object} values
-   * @returns {Promise<object|null>} The old values.
+   * @param {string} name
+   * @param {JsonObject} value
+   * @returns {Promise<JsonObject|null>} The old values.
    */
-  async #save(key, values) {
-    const { Config } = this.#uw.models;
+  async #save(name, value) {
+    const { db } = this.#uw;
 
-    const previousValues = await Config.findByIdAndUpdate(
-      key,
-      { _id: key, ...values },
-      { upsert: true },
-    );
+    const previous = await db.transaction().execute(async (tx) => {
+      const row = await tx.selectFrom('configuration')
+        .select('value')
+        .where('name', '=', name)
+        .executeTakeFirst();
 
-    return omit(previousValues, '_id');
+      await tx.insertInto('configuration')
+        .values({ name, value })
+        .onConflict((oc) => oc.column('name').doUpdateSet({ value }))
+        .execute();
+
+      return row?.value ?? null;
+    });
+
+    return previous;
   }
 
   /**
    * @param {string} key
-   * @returns {Promise<object|null>}
+   * @returns {Promise<JsonObject|null>}
    */
   async #load(key) {
-    const { Config } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const model = await Config.findById(key);
-    if (!model) return null;
+    const row = await db.selectFrom('configuration')
+      .select(['value'])
+      .where('name', '=', key)
+      .executeTakeFirst();
+    if (!row) {
+      return null;
+    }
 
-    const doc = model.toJSON();
-    return omit(doc, '_id');
+    return row.value;
   }
 
   /**
@@ -149,13 +162,15 @@ class ConfigStore {
    * Get the current settings for a config group.
    *
    * @param {string} key
-   * @returns {Promise<undefined | object>} - `undefined` if the config group named `key` does not
+   * @returns {Promise<undefined | JsonObject>} - `undefined` if the config group named `key` does not
    *     exist. An object containing current settings otherwise.
    * @public
    */
   async get(key) {
     const validate = this.#validators.get(key);
-    if (!validate) return undefined;
+    if (!validate) {
+      return undefined;
+    }
 
     const config = (await this.#load(key)) ?? {};
     // Allowed to fail--just fills in defaults
@@ -170,7 +185,7 @@ class ConfigStore {
    * Rejects if the settings do not follow the schema for the config group.
    *
    * @param {string} key
-   * @param {object} settings
+   * @param {JsonObject} settings
    * @param {{ user?: User }} [options]
    * @public
    */
@@ -196,20 +211,26 @@ class ConfigStore {
   /**
    * Get *all* settings.
    *
-   * @returns {Promise<{ [key: string]: object }>}
+   * @returns {Promise<{ [key: string]: JsonObject }>}
    */
   async getAllConfig() {
-    const { Config } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const all = await Config.find();
-    const object = Object.create(null);
+    const results = await db.selectFrom('configuration')
+      .select(['name', 'value'])
+      .execute();
+
+    const configs = Object.create(null);
     for (const [key, validate] of this.#validators.entries()) {
-      const model = all.find((m) => m._id === key);
-      object[key] = model ? model.toJSON() : {};
-      delete object[key]._id;
-      validate(object[key]);
+      const row = results.find((m) => m.name === key);
+      if (row) {
+        validate(row.value);
+        configs[key] = row.value;
+      } else {
+        configs[key] = {};
+      }
     }
-    return object;
+    return configs;
   }
 
   /**
