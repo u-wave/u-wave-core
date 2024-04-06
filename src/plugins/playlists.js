@@ -1,4 +1,3 @@
-import lodash from 'lodash';
 import ObjectGroupBy from 'object.groupby';
 import {
   PlaylistNotFoundError,
@@ -10,8 +9,6 @@ import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-
-const { shuffle } = lodash;
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -240,25 +237,17 @@ class PlaylistsRepository {
   }
 
   /**
+   * "Cycle" the playlist, moving its first item to last.
+   *
    * @param {Playlist} playlist
    */
   async cyclePlaylist(playlist) {
     const { db } = this.#uw;
 
-    await db.updateTable('playlistItems')
-      .where('playlistID', '=', playlist.id)
-      .where('order', '=', 0)
-      .set({
-        order: (eb) => eb.selectFrom('playlistItems')
-          .where('playlistID', '=', playlist.id)
-          .select((eb) => sql`${eb.fn.max('order')} + 1`.as('max')),
-      })
-      .execute()
-
-    await db.updateTable('playlistItems')
-      .where('playlistID', '=', playlist.id)
-      .set({ order: sql`order - 1` })
-      .execute()
+    await db.updateTable('playlists')
+      .where('id', '=', playlist.id)
+      .set({ items: sql`array_append(items[2:], items[1])` })
+      .execute();
   }
 
   /**
@@ -267,21 +256,10 @@ class PlaylistsRepository {
   async shufflePlaylist(playlist) {
     const { db } = this.#uw;
 
-    const previousOrder = await db.selectFrom('playlistItems')
-      .where('playlistID', '=', playlist.id)
-      .select(['id'])
-      .orderBy('order', 'asc')
+    await db.updateTable('playlists')
+      .where('id', '=', playlist.id)
+      .set({ items: sql`array_shuffle(items)` })
       .execute();
-
-    const newOrder = shuffle(previousOrder);
-    await db.transaction().execute(async (tx) => {
-      await Promise.all(newOrder.map((item, order) => (
-        tx.updateTable('playlistItems')
-          .where('id', '=', item.id)
-          .set({ order })
-          .executeTakeFirst()
-      )));
-    });
   }
 
   /**
@@ -325,7 +303,13 @@ class PlaylistsRepository {
 
     const raw = await db.selectFrom('playlistItems')
       .where('playlistItems.playlistID', '=', playlist.id)
-      .where('playlistItems.order', '=', order)
+      .where('playlistItems.id', '=', (eb) => {
+        /** @type {import('kysely').RawBuilder<PlaylistItemID>} */
+        const item =  sql`items[${order}]`
+        return eb.selectFrom('playlists')
+          .select(item.as('playlistItemID'))
+          .where('id', '=', playlist.id)
+      })
       .innerJoin('media', 'media.id', 'playlistItems.mediaID')
       .select(playlistItemSelection)
       .executeTakeFirst();
@@ -345,30 +329,46 @@ class PlaylistsRepository {
   async getPlaylistItems(playlist, filter, pagination) {
     const { db } = this.#uw;
 
-    let query = db.selectFrom('playlistItems')
-      .where('playlistID', '=', playlist.id)
+    /**
+     * @template {unknown[]} T
+     * @param {import('kysely').Expression<T>} expr
+     * @returns {import('kysely').RawBuilder<import('type-fest/source/internal.js').ArrayElement<T>>}
+     */
+    function unnest (expr) {
+      return sql`unnest(${expr})`
+    }
+
+    let query = db.selectFrom('playlists')
+      .where('id', '=', playlist.id)
+      .innerJoin('playlistItems', (join) => join.on((eb) => eb(
+        unnest(eb.ref('playlists.items')),
+        '=',
+        eb.ref('playlistItems.id'),
+      )))
       .innerJoin('media', 'playlistItems.mediaID', 'media.id')
       .select(playlistItemSelection);
     if (filter != null) {
-      query = query.where('playlistItems.artist', 'like', filter)
-        .orWhere('playlistItems.title', 'like', filter);
+      query = query.where((eb) => eb.or([
+        eb('playlistItems.artist', 'like', filter),
+        eb('playlistItems.title', 'like', filter),
+      ]));
     }
 
     query = query
       .offset(pagination.offset)
       .limit(pagination.limit);
 
-    const totalQuery = db.selectFrom('playlistItems')
-      .select((eb) => eb.fn.countAll().as('count'))
-      .where('playlistID', '=', playlist.id);
+    const totalQuery = db.selectFrom('playlists')
+      .select(sql`array_length(items)`.as('count'))
+      .where('id', '=', playlist.id);
 
     const filteredQuery = filter == null ? totalQuery : db.selectFrom('playlistItems')
       .select((eb) => eb.fn.countAll().as('count'))
       .where('playlistID', '=', playlist.id)
-      .where('playlistItems.artist', 'like', filter)
-      .orWhere('playlistItems.artist', 'like', filter);
-
-    query = query.orderBy('playlistItems.order', 'asc');
+      .where((eb) => eb.or([
+        eb('playlistItems.artist', 'like', filter),
+        eb('playlistItems.title', 'like', filter),
+      ]));
 
     const [
       playlistItemsRaw,
@@ -610,33 +610,39 @@ class PlaylistsRepository {
   async movePlaylistItems(playlist, itemIDs, { afterID }) {
     const { db } = this.#uw;
 
-    const distance = itemIDs.length;
     await db.transaction().execute(async (tx) => {
-      let query = tx.updateTable('playlistItems')
-        .where('playlistID', '=', playlist.id)
-        .where('id', 'not in', itemIDs)
-        .set({ order: (eb) => sql`${eb.ref('order')} + ${distance}` });
-      if (afterID) {
-        query = query.where('order', '>', (eb) => (
-          eb.selectFrom('playlistItems').where('id', '=', afterID).select('order')
-        ));
+      const result = await tx.selectFrom('playlists')
+        .select('items')
+        .where('id', '=', playlist.id)
+        .executeTakeFirst();
+
+      const itemIDsInPlaylist = new Set(result?.items ?? []);
+      const itemIDsToMove = new Set(itemIDs.filter((itemID) => itemIDsInPlaylist.has(itemID)));
+
+      /** @type {PlaylistItemID[]} */
+      let newItemIDs = [];
+      let insertIndex = 0;
+      let index = 0;
+      for (const itemID of itemIDsInPlaylist) {
+        index += 1;
+        if (!itemIDsToMove.has(itemID)) {
+          newItemIDs.push(itemID);
+        }
+        if (itemID === afterID) {
+          insertIndex = index;
+        }
       }
 
-      query = query.returning([
-        afterID ? ((eb) => eb.selectFrom('playlistItems')
-          .where('id', '=', afterID)
-          .select('order')
-          .as('insertAt')) : sql`0`.as('insertAt'),
-      ]);
+      newItemIDs = [
+        ...newItemIDs.slice(0, insertIndex),
+        ...itemIDsToMove,
+        ...newItemIDs.slice(insertIndex),
+      ];
 
-      const { insertAt } = await query.executeTakeFirstOrThrow();
-
-      await Promise.all(itemIDs.map((playlistItemID, order) => (
-        tx.updateTable('playlistItems')
-          .where('id', '=', playlistItemID)
-          .set({ order: insertAt + order })
-          .executeTakeFirst()
-      )));
+      await tx.updateTable('playlists')
+        .where('id', '=', playlist.id)
+        .set('items', newItemIDs)
+        .execute();
     });
 
     return {};
@@ -647,23 +653,21 @@ class PlaylistsRepository {
    * @param {PlaylistItemID[]} itemIDs
    */
   async removePlaylistItems(playlist, itemIDs) {
-    const { PlaylistItem } = this.#uw.models;
-
     // Only remove items that are actually in this playlist.
-    const stringIDs = new Set(itemIDs.map((item) => String(item)));
+    const set = new Set(itemIDs);
     /** @type {PlaylistItemID[]} */
     const toRemove = [];
     /** @type {PlaylistItemID[]} */
     const toKeep = [];
-    playlist.media.forEach((itemID) => {
-      if (stringIDs.has(`${itemID}`)) {
+    playlist.items.forEach((itemID) => {
+      if (set.has(itemID)) {
         toRemove.push(itemID);
       } else {
         toKeep.push(itemID);
       }
     });
 
-    playlist.media = toKeep;
+    playlist.items = toKeep;
     await playlist.save();
     await PlaylistItem.deleteMany({ _id: { $in: toRemove } });
 

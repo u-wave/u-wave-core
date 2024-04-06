@@ -71,7 +71,7 @@ async function up({ context: uw }) {
           })
           .execute();
 
-        let order = 0;
+        const items = [];
         for (const itemMongoID of playlist.media) {
           const itemID = randomUUID();
           idMap.set(itemMongoID.toString(), itemID);
@@ -86,14 +86,18 @@ async function up({ context: uw }) {
               title: item.title,
               start: item.start,
               end: item.end,
-              order,
               createdAt: item.createdAt,
               updatedAt: item.updatedAt,
             })
             .execute();
 
-          order += 1;
+          items.push(itemID);
         }
+
+        await tx.updateTable('playlists')
+          .where('id', '=', playlistID)
+          .set({ items })
+          .execute();
       }
     }
 

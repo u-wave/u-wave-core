@@ -48,11 +48,13 @@ export interface AuthServiceTable {
   updatedAt: Generated<Date>,
 }
 
-export type Playlist = Selected<PlaylistTable>;
+export type Playlist = Selected<Omit<PlaylistTable, 'items'>>;
+export type PlaylistWithItems = Selected<PlaylistTable>;
 export interface PlaylistTable {
   id: Generated<PlaylistID>,
   userID: UserID,
   name: string,
+  items: PlaylistItemID[],
   createdAt: Generated<Date>,
   updatedAt: Generated<Date>,
 }
@@ -66,7 +68,6 @@ export interface PlaylistItemTable {
   title: string,
   start: number,
   end: number,
-  order: number,
   createdAt: Generated<Date>,
   updatedAt: Generated<Date>,
 }
