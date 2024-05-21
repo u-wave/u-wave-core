@@ -57,7 +57,7 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "pino": "^9.0.0",
-    "pino-http": "^9.0.0",
+    "pino-http": "^10.1.0",
     "qs": "^6.9.1",
     "random-string": "^0.2.0",
     "ratelimiter": "^3.4.0",
