@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { inspect } from 'util';
 import supertest from 'supertest';
-import sinon from 'sinon';
+import * as sinon from 'sinon';
 import randomString from 'random-string';
 import createUwave from './utils/createUwave.mjs';
 
