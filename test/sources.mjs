@@ -1,6 +1,6 @@
 import assert from 'assert';
 import supertest from 'supertest';
-import sinon from 'sinon';
+import * as sinon from 'sinon';
 import { Source } from '../src/Source.js';
 import createUwave from './utils/createUwave.mjs';
 

@@ -1,5 +1,5 @@
 import assert from 'assert';
-import sinon from 'sinon';
+import * as sinon from 'sinon';
 import supertest from 'supertest';
 import nock from 'nock';
 import testKeys from 'recaptcha-test-keys';

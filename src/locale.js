@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import i18next from 'i18next';
+import * as i18next from 'i18next';
 import YAML from 'yaml';
 
 const source = fs.readFileSync(new URL('../locale/en.yaml', import.meta.url), 'utf8');

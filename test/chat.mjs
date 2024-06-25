@@ -1,5 +1,5 @@
 import assert from 'assert';
-import sinon from 'sinon';
+import * as sinon from 'sinon';
 import delay from 'delay';
 import createUwave from './utils/createUwave.mjs';
 
