@@ -332,7 +332,7 @@ class PlaylistsRepository {
     /**
      * @template {unknown[]} T
      * @param {import('kysely').Expression<T>} expr
-     * @returns {import('kysely').RawBuilder<import('type-fest/source/internal.js').ArrayElement<T>>}
+     * @returns {import('kysely').RawBuilder<T[0]>}
      */
     function unnest (expr) {
       return sql`unnest(${expr})`

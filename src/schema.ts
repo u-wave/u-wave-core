@@ -1,11 +1,11 @@
 import type { Generated } from 'kysely';
-import type { JsonObject, Opaque } from 'type-fest';
+import type { JsonObject, Tagged } from 'type-fest';
 
-export type UserID = Opaque<string, 'UserID'>;
-export type MediaID = Opaque<string, 'MediaID'>;
-export type PlaylistID = Opaque<string, 'PlaylistID'>;
-export type PlaylistItemID = Opaque<string, 'PlaylistItemID'>;
-export type HistoryEntryID = Opaque<string, 'HistoryEntryID'>;
+export type UserID = Tagged<string, 'UserID'>;
+export type MediaID = Tagged<string, 'MediaID'>;
+export type PlaylistID = Tagged<string, 'PlaylistID'>;
+export type PlaylistItemID = Tagged<string, 'PlaylistItemID'>;
+export type HistoryEntryID = Tagged<string, 'HistoryEntryID'>;
 
 type Selected<T> = {
   [K in keyof T]: T[K] extends Generated<infer Inner> ? Inner : T[K];
