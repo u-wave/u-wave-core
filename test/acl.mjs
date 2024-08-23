@@ -1,6 +1,6 @@
 import assert from 'assert';
 import supertest from 'supertest';
-import sinon from 'sinon';
+import * as sinon from 'sinon';
 import createUwave from './utils/createUwave.mjs';
 
 describe('ACL', () => {
