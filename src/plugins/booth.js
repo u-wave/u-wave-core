@@ -21,6 +21,36 @@ const { omit } = lodash;
  *     & PopulateUser & PopulatePlaylist & PopulateMedia} PopulatedHistoryEntry
  */
 
+const REDIS_ADVANCING = 'booth:advancing';
+const REDIS_HISTORY_ID = 'booth:historyID';
+const REDIS_CURRENT_DJ_ID = 'booth:currentDJ';
+const REDIS_REMOVE_AFTER_CURRENT_PLAY = 'booth:removeAfterCurrentPlay';
+const REDIS_UPVOTES = 'booth:upvotes';
+const REDIS_DOWNVOTES = 'booth:downvotes';
+const REDIS_FAVORITES = 'booth:favorites';
+
+const REMOVE_AFTER_CURRENT_PLAY_SCRIPT = {
+  keys: [REDIS_CURRENT_DJ_ID, REDIS_REMOVE_AFTER_CURRENT_PLAY],
+  lua: `
+    local k_dj = KEYS[1]
+    local k_remove = KEYS[2]
+    local user_id = ARGV[1]
+    local value = ARGV[2]
+    local current_dj_id = redis.call('GET', k_dj)
+    if current_dj_id == user_id then
+      if value == 'true' then
+        redis.call('SET', k_remove, 'true')
+        return 1
+      else
+        redis.call('DEL', k_remove)
+        return 0
+      end
+    else
+      return redis.error_reply('You are not currently playing')
+    end
+  `,
+};
+
 /**
  * @param {Playlist} playlist
  * @returns {Promise<void>}
@@ -53,6 +83,11 @@ class Booth {
     this.#uw = uw;
     this.#locker = new RedLock([this.#uw.redis]);
     this.#logger = uw.logger.child({ ns: 'uwave:booth' });
+
+    uw.redis.defineCommand('uw:removeAfterCurrentPlay', {
+      numberOfKeys: REMOVE_AFTER_CURRENT_PLAY_SCRIPT.keys.length,
+      lua: REMOVE_AFTER_CURRENT_PLAY_SCRIPT.lua,
+    });
   }
 
   /** @internal */
@@ -96,7 +131,7 @@ class Booth {
    */
   async getCurrentEntry() {
     const { HistoryEntry } = this.#uw.models;
-    const historyID = await this.#uw.redis.get('booth:historyID');
+    const historyID = await this.#uw.redis.get(REDIS_HISTORY_ID);
     if (!historyID) {
       return null;
     }
@@ -113,9 +148,9 @@ class Booth {
     const { redis } = this.#uw;
 
     const results = await redis.pipeline()
-      .smembers('booth:upvotes')
-      .smembers('booth:downvotes')
-      .smembers('booth:favorites')
+      .smembers(REDIS_UPVOTES)
+      .smembers(REDIS_DOWNVOTES)
+      .smembers(REDIS_FAVORITES)
       .exec();
     assert(results);
 
@@ -148,7 +183,7 @@ class Booth {
     let userID = await this.#uw.redis.lindex('waitlist', 0);
     if (!userID && !options.remove) {
       // If the waitlist is empty, the current DJ will play again immediately.
-      userID = await this.#uw.redis.get('booth:currentDJ');
+      userID = await this.#uw.redis.get(REDIS_CURRENT_DJ_ID);
     }
     if (!userID) {
       return null;
@@ -215,24 +250,25 @@ class Booth {
     }
   }
 
-  clear() {
-    return this.#uw.redis.del(
-      'booth:historyID',
-      'booth:currentDJ',
-      'booth:upvotes',
-      'booth:downvotes',
-      'booth:favorites',
+  async clear() {
+    await this.#uw.redis.del(
+      REDIS_HISTORY_ID,
+      REDIS_CURRENT_DJ_ID,
+      REDIS_REMOVE_AFTER_CURRENT_PLAY,
+      REDIS_UPVOTES,
+      REDIS_DOWNVOTES,
+      REDIS_FAVORITES,
     );
   }
 
   /**
    * @param {PopulatedHistoryEntry} next
    */
-  #update(next) {
-    return this.#uw.redis.multi()
-      .del('booth:upvotes', 'booth:downvotes', 'booth:favorites')
-      .set('booth:historyID', next.id)
-      .set('booth:currentDJ', next.user.id)
+  async #update(next) {
+    await this.#uw.redis.multi()
+      .del(REDIS_UPVOTES, REDIS_DOWNVOTES, REDIS_FAVORITES, REDIS_REMOVE_AFTER_CURRENT_PLAY)
+      .set(REDIS_HISTORY_ID, next.id)
+      .set(REDIS_CURRENT_DJ_ID, next.user.id)
       .exec();
   }
 
@@ -335,7 +371,8 @@ class Booth {
    */
   async #advanceLocked(opts = {}) {
     const publish = opts.publish ?? true;
-    const remove = opts.remove || (
+    const removeAfterCurrent = (await this.#uw.redis.del(REDIS_REMOVE_AFTER_CURRENT_PLAY)) === 1;
+    const remove = opts.remove || removeAfterCurrent || (
       !await this.#uw.waitlist.isCycleEnabled()
     );
 
@@ -409,12 +446,39 @@ class Booth {
    */
   advance(opts = {}) {
     const result = this.#locker.using(
-      ['booth:advancing'],
+      [REDIS_ADVANCING],
       10_000,
       (signal) => this.#advanceLocked({ ...opts, signal }),
     );
     this.#awaitAdvance = result;
     return result;
+  }
+
+  /**
+   * @param {User} user
+   * @param {boolean} remove
+   */
+  async setRemoveAfterCurrentPlay(user, remove) {
+    const newValue = await this.#uw.redis['uw:removeAfterCurrentPlay'](
+      ...REMOVE_AFTER_CURRENT_PLAY_SCRIPT.keys,
+      user._id.toString(),
+      remove,
+    );
+    return newValue === 1;
+  }
+
+  /**
+   * @param {User} user
+   */
+  async getRemoveAfterCurrentPlay(user) {
+    const [currentDJ, removeAfterCurrentPlay] = await this.#uw.redis.mget(
+      REDIS_CURRENT_DJ_ID,
+      REDIS_REMOVE_AFTER_CURRENT_PLAY,
+    );
+    if (currentDJ === user.id) {
+      return removeAfterCurrentPlay != null;
+    }
+    return null;
   }
 }
 
