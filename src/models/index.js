@@ -1,4 +1,5 @@
 import aclRoleSchema from './AclRole.js';
+import authenticationSchema from './Authentication.js';
 import configSchema from './Config.js';
 import historySchema from './History.js';
 import mediaSchema from './Media.js';
@@ -9,6 +10,7 @@ import userSchema from './User.js';
 
 /**
  * @typedef {import('./AclRole.js').AclRole} AclRole
+ * @typedef {import('./Authentication.js').Authentication} Authentication
  * @typedef {import('./Config.js').Config} Config
  * @typedef {import('./History.js').HistoryEntry} HistoryEntry
  * @typedef {import('./Media.js').Media} Media
@@ -18,6 +20,7 @@ import userSchema from './User.js';
  * @typedef {import('./User.js').User} User
  * @typedef {{
  *  AclRole: import('mongoose').Model<AclRole, {}, {}>,
+ *  Authentication: import('mongoose').Model<Authentication, {}, {}>,
  *  Config: import('mongoose').Model<Config, {}, {}>,
  *  HistoryEntry: import('mongoose').Model<HistoryEntry, {}, {}>,
  *  Media: import('mongoose').Model<Media, {}, {}>,
@@ -34,6 +37,7 @@ import userSchema from './User.js';
 async function models(uw) {
   uw.models = {
     AclRole: uw.mongo.model('AclRole', aclRoleSchema),
+    Authentication: uw.mongo.model('Authentication', authenticationSchema),
     Config: uw.mongo.model('Config', configSchema),
     HistoryEntry: uw.mongo.model('History', historySchema),
     Media: uw.mongo.model('Media', mediaSchema),

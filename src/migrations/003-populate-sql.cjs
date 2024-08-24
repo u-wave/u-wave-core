@@ -106,6 +106,27 @@ async function up({ context: uw }) {
       }
     }
 
+    for await (const entry of models.Authentication.find().lean()) {
+      const userID = idMap.get(entry.user.toString());
+      if (userID == null) {
+        throw new Error('Migration failure: unknown user ID');
+      }
+
+      if (entry.email != null) {
+        await tx.updateTable('users')
+          .where('id', '=', userID)
+          .set({ email: entry.email })
+          .execute();
+      }
+
+      if (entry.hash != null) {
+        await tx.updateTable('users')
+          .where('id', '=', userID)
+          .set({ password: entry.hash })
+          .execute();
+      }
+    }
+
     for await (const entry of models.HistoryEntry.find().lean()) {
       const entryID = randomUUID();
       idMap.set(entry._id.toString(), entryID);
