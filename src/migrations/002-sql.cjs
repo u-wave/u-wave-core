@@ -2,7 +2,7 @@
 
 const { sql } = require('kysely');
 
-const now = sql`(now())`;
+const now = sql`(strftime('%FT%T', 'now'))`;
 const emptyArray = sql`(jsonb('[]'))`;
 
 /**

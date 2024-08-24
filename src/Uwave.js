@@ -38,6 +38,33 @@ class UwCamelCasePlugin extends CamelCasePlugin {
   }
 }
 
+class SqliteDateColumnsPlugin {
+  /** @param {string[]} dateColumns */
+  constructor(dateColumns) {
+    this.dateColumns = dateColumns;
+  }
+
+  /** @param {import('kysely').PluginTransformQueryArgs} args */
+  transformQuery(args) {
+    return args.node;
+  }
+
+  /** @param {import('kysely').PluginTransformResultArgs} args */
+  async transformResult(args) {
+    for (const row of args.result.rows) {
+      for (const col of this.dateColumns) {
+        if (col in row && row[col] != null) {
+          const value = row[col];
+          if (typeof value === 'string' || typeof value === 'number') {
+            row[col] = new Date(value);
+          }
+        }
+      }
+    }
+    return args.result
+  }
+}
+
 /**
  * @typedef {import('./Source.js').SourcePlugin} SourcePlugin
  */
@@ -178,6 +205,7 @@ class UwaveServer extends EventEmitter {
       // }),
       plugins: [
         new UwCamelCasePlugin(),
+        new SqliteDateColumnsPlugin(['createdAt', 'updatedAt', 'expiresAt', 'playedAt', 'lastSeenAt']),
       ],
       log: ['query', 'error'],
     });

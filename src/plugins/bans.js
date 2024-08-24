@@ -5,6 +5,9 @@ import Page from '../Page.js';
 
 const { clamp } = lodash;
 
+/** @type {import('kysely').Expression<Date>} */
+const now = sql`(strftime('%FT%T', 'now'))`;
+
 class Bans {
   #uw;
 
@@ -29,7 +32,7 @@ class Bans {
       .where('userID', '=', user.id)
       .where(({ or, eb }) => or([
         eb('expiresAt', 'is', null),
-        eb('expiresAt', '>', sql`now()`)
+        eb('expiresAt', '>', now),
       ]))
       .executeTakeFirst();
 
@@ -72,7 +75,7 @@ class Bans {
       ])
       .where(({ eb, or }) => or([
         eb('expiresAt', 'is', null),
-        eb('expiresAt', '>', sql`now()`),
+        eb('expiresAt', '>', now),
       ]));
 
     if (filter) {
