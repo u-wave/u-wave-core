@@ -3,6 +3,11 @@
 const { randomUUID } = require('node:crypto');
 const { sql } = require('kysely');
 
+/** @param {unknown} value */
+function jsonb(value) {
+  return sql`jsonb(${JSON.stringify(value)})`;
+}
+
 /**
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
  */
@@ -16,7 +21,7 @@ async function up({ context: uw }) {
     for await (const config of models.Config.find().lean()) {
       const { _id: name, ...value } = config;
       await tx.insertInto('configuration')
-        .values({ name, value })
+        .values({ name, value: jsonb(value) })
         .execute();
     }
 
@@ -27,16 +32,16 @@ async function up({ context: uw }) {
           id,
           sourceType: media.sourceType,
           sourceID: media.sourceID,
-          sourceData: media.sourceData,
+          sourceData: jsonb(media.sourceData),
           artist: media.artist,
           title: media.title,
           duration: media.duration,
           thumbnail: media.thumbnail,
-          createdAt: media.createdAt,
-          updatedAt: media.updatedAt,
+          createdAt: media.createdAt.toISOString(),
+          updatedAt: media.updatedAt.toISOString(),
         })
-        .onConflict((conflict) => conflict.constraint('media_source_key').doUpdateSet({
-          updatedAt: (eb) => eb.ref('EXCLUDED.updatedAt'),
+        .onConflict((conflict) => conflict.columns(['sourceType', 'sourceID']).doUpdateSet({
+          updatedAt: (eb) => eb.ref('excluded.updatedAt'),
         }))
         .execute();
 
@@ -52,8 +57,8 @@ async function up({ context: uw }) {
           id: userID,
           username: user.username,
           slug: user.slug,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
+          createdAt: user.createdAt.toISOString(),
+          updatedAt: user.updatedAt.toISOString(),
         })
         .execute();
 
@@ -66,8 +71,8 @@ async function up({ context: uw }) {
             id: playlistID,
             name: playlist.name,
             userID,
-            createdAt: playlist.createdAt,
-            updatedAt: playlist.updatedAt,
+            createdAt: playlist.createdAt.toISOString(),
+            updatedAt: playlist.updatedAt.toISOString(),
           })
           .execute();
 
@@ -86,8 +91,8 @@ async function up({ context: uw }) {
               title: item.title,
               start: item.start,
               end: item.end,
-              createdAt: item.createdAt,
-              updatedAt: item.updatedAt,
+              createdAt: item.createdAt.toISOString(),
+              updatedAt: item.updatedAt.toISOString(),
             })
             .execute();
 
@@ -96,7 +101,7 @@ async function up({ context: uw }) {
 
         await tx.updateTable('playlists')
           .where('id', '=', playlistID)
-          .set({ items })
+          .set({ items: jsonb(items) })
           .execute();
       }
     }
@@ -115,8 +120,8 @@ async function up({ context: uw }) {
           title: entry.media.title,
           start: entry.media.start,
           end: entry.media.end,
-          sourceData: entry.media.sourceData,
-          createdAt: entry.playedAt,
+          sourceData: jsonb(entry.media.sourceData),
+          createdAt: entry.playedAt.toISOString(),
           // TODO vote statistics
         })
         .execute();

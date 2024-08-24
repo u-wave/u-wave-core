@@ -2,6 +2,9 @@
 
 const { sql } = require('kysely');
 
+const now = sql`(now())`;
+const emptyArray = sql`(jsonb('[]'))`;
+
 /**
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
  */
@@ -22,8 +25,8 @@ async function up({ context: uw }) {
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('duration', 'integer', (col) => col.notNull())
     .addColumn('thumbnail', 'text', (col) => col.notNull())
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .addUniqueConstraint('media_source_key', ['source_type', 'source_id'])
     .execute();
 
@@ -33,10 +36,9 @@ async function up({ context: uw }) {
     .addColumn('email', 'text')
     .addColumn('password', 'text')
     .addColumn('slug', 'text', (col) => col.notNull().unique())
-    .addColumn('active_playlist_id', 'uuid')
     .addColumn('pending_activation', 'boolean', (col) => col.defaultTo(null))
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .addUniqueConstraint('user_email', ['email'])
     .execute();
 
@@ -45,8 +47,8 @@ async function up({ context: uw }) {
     .addColumn('moderator_id', 'uuid', (col) => col.notNull().references('users.id'))
     .addColumn('expires_at', 'timestamp')
     .addColumn('reason', 'text')
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
 
   await db.schema.createTable('auth_services')
@@ -54,8 +56,8 @@ async function up({ context: uw }) {
     .addColumn('service', 'text', (col) => col.notNull())
     .addColumn('service_id', 'text', (col) => col.notNull())
     .addColumn('service_avatar', 'text')
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .addUniqueConstraint('user_auth_service', ['user_id', 'service'])
     .addUniqueConstraint('auth_service', ['service', 'service_id'])
     .execute();
@@ -64,9 +66,9 @@ async function up({ context: uw }) {
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('name', 'text', (col) => col.notNull())
     .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('items', 'jsonb', (col) => col.notNull().defaultTo('[]'))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('items', 'jsonb', (col) => col.notNull().defaultTo(emptyArray))
     .execute();
 
   await db.schema.createTable('playlist_items')
@@ -77,8 +79,8 @@ async function up({ context: uw }) {
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('start', 'integer', (col) => col.notNull())
     .addColumn('end', 'integer', (col) => col.notNull())
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
-    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
 
   await db.schema.createTable('history_entries')
@@ -90,7 +92,7 @@ async function up({ context: uw }) {
     .addColumn('start', 'integer', (col) => col.notNull())
     .addColumn('end', 'integer', (col) => col.notNull())
     .addColumn('source_data', 'jsonb')
-    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
 
   /*
@@ -104,7 +106,7 @@ async function up({ context: uw }) {
   */
 
   await db.schema.alterTable('users')
-    .addForeignKeyConstraint('users_active_playlist', ['active_playlist_id'], 'playlists', ['id'])
+    .addColumn('active_playlist_id', 'uuid', (col) => col.references('playlists.id'))
     .execute();
 }
 

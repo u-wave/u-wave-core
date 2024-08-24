@@ -35,3 +35,7 @@ package-lock.json
 .nyc_output
 
 .env
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

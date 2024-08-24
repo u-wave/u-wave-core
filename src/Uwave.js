@@ -161,18 +161,21 @@ class UwaveServer extends EventEmitter {
 
     /** @type {Kysely<import('./schema.js').Database>} */
     this.db = new Kysely({
-      // dialect: new SqliteDialect({
-      //   async database() {
-      //     const { default: Database } = await import('better-sqlite3');
-      //     return new Database('test.sqlite');
-      //   },
-      // }),
-      dialect: new PostgresDialect({
-        pool: new pg.Pool({
-          user: 'uwave',
-          database: 'uwave_test',
-        }),
+      dialect: new SqliteDialect({
+        async database() {
+          const { default: Database } = await import('better-sqlite3');
+          const db = new Database('uwave_local.sqlite');
+          db.pragma('journal_mode = WAL');
+          db.pragma('foreign_keys = ON');
+          return db;
+        },
       }),
+      // dialect: new PostgresDialect({
+      //   pool: new pg.Pool({
+      //     user: 'uwave',
+      //     database: 'uwave_test',
+      //   }),
+      // }),
       plugins: [
         new UwCamelCasePlugin(),
       ],
