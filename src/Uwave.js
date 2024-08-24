@@ -1,6 +1,5 @@
 import EventEmitter from 'node:events';
-import { promisify, inspect } from 'node:util';
-import pg from 'pg';
+import { promisify } from 'node:util';
 import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import avvio from 'avvio';

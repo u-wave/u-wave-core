@@ -331,20 +331,33 @@ class PlaylistsRepository {
     /**
      * @template {unknown[]} T
      * @param {import('kysely').Expression<T>} expr
-     * @returns {import('kysely').RawBuilder<T[0]>}
+     * @returns {import('kysely').RawBuilder<{
+     *   key: unknown,
+     *   value: T[0],
+     *   type: string,
+     *   atom: T[0],
+     *   id: number,
+     *   parent: number,
+     *   fullkey: string,
+     *   path: string,
+     * }>}
      */
-    function unnest (expr) {
-      return sql`unnest(${expr})`
+    function jsonEach(expr) {
+      return sql`json_each(${expr})`
     }
 
     let query = db.selectFrom('playlists')
-      .where('id', '=', playlist.id)
+      .innerJoin(
+        (eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'),
+        (join) => join,
+      )
       .innerJoin('playlistItems', (join) => join.on((eb) => eb(
-        unnest(eb.ref('playlists.items')),
+        eb.ref('playlistItemIDs.value'),
         '=',
         eb.ref('playlistItems.id'),
       )))
       .innerJoin('media', 'playlistItems.mediaID', 'media.id')
+      .where('playlists.id', '=', playlist.id)
       .select(playlistItemSelection);
     if (filter != null) {
       query = query.where((eb) => eb.or([
@@ -358,7 +371,7 @@ class PlaylistsRepository {
       .limit(pagination.limit);
 
     const totalQuery = db.selectFrom('playlists')
-      .select(sql`array_length(items)`.as('count'))
+      .select(sql`json_array_length(items)`.as('count'))
       .where('id', '=', playlist.id);
 
     const filteredQuery = filter == null ? totalQuery : db.selectFrom('playlistItems')
