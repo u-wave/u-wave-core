@@ -1,12 +1,9 @@
 import lodash from 'lodash';
-import { sql } from 'kysely';
 import { UserNotFoundError } from '../errors/index.js';
 import Page from '../Page.js';
+import { now } from '../utils/sqlite.js';
 
 const { clamp } = lodash;
-
-/** @type {import('kysely').Expression<Date>} */
-const now = sql`(strftime('%FT%T', 'now'))`;
 
 class Bans {
   #uw;

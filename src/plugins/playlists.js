@@ -9,6 +9,7 @@ import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
+import { jsonb, jsonEach, jsonLength } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -154,14 +155,14 @@ class PlaylistsRepository {
 
     const playlist = await db.selectFrom('playlists')
       .where('userID', '=', user.id)
-      .where('playlists.id', '=', id)
+      .where('id', '=', id)
       .select([
-        'playlists.id',
-        'playlists.userID',
-        'playlists.name',
-        'playlists.createdAt',
-        'playlists.updatedAt',
-        (eb) => sql`json_array_length(${eb.ref('playlists.items')})`.as('size'),
+        'id',
+        'userID',
+        'name',
+        'createdAt',
+        'updatedAt',
+        (eb) => jsonLength(eb.ref('items')).as('size'),
       ])
       .executeTakeFirst();
 
@@ -214,7 +215,7 @@ class PlaylistsRepository {
       .select([
         'id',
         'name',
-        (eb) => sql`json_array_length(${eb.ref('items')})`.as('size'),
+        (eb) => jsonLength(eb.ref('items')).as('size'),
         'createdAt',
       ])
       .execute();
@@ -329,24 +330,6 @@ class PlaylistsRepository {
   async getPlaylistItems(playlist, filter, pagination) {
     const { db } = this.#uw;
 
-    /**
-     * @template {unknown[]} T
-     * @param {import('kysely').Expression<T>} expr
-     * @returns {import('kysely').RawBuilder<{
-     *   key: unknown,
-     *   value: T[0],
-     *   type: string,
-     *   atom: T[0],
-     *   id: number,
-     *   parent: number,
-     *   fullkey: string,
-     *   path: string,
-     * }>}
-     */
-    function jsonEach(expr) {
-      return sql`json_each(${expr})`
-    }
-
     let query = db.selectFrom('playlists')
       .innerJoin(
         (eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'),
@@ -372,7 +355,7 @@ class PlaylistsRepository {
       .limit(pagination.limit);
 
     const totalQuery = db.selectFrom('playlists')
-      .select(sql`json_array_length(items)`.as('count'))
+      .select((eb) => jsonLength(eb.ref('items')).as('count'))
       .where('id', '=', playlist.id)
       .executeTakeFirstOrThrow();
 
@@ -521,7 +504,7 @@ class PlaylistsRepository {
         const toInsert = unknownMedias.map((media) => /** @type {Media} */ ({
           sourceType: media.sourceType,
           sourceID: media.sourceID,
-          sourceData: media.sourceData,
+          sourceData: jsonb(media.sourceData),
           artist: media.artist,
           title: media.title,
           duration: media.duration,
