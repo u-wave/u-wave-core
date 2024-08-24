@@ -25,7 +25,7 @@ import { sql } from 'kysely';
 /**
  * @typedef {object} PlaylistItemDesc
  * @prop {string} sourceType
- * @prop {string|number} sourceID
+ * @prop {string} sourceID
  * @prop {string} [artist]
  * @prop {string} [title]
  * @prop {number} [start]
@@ -231,8 +231,7 @@ class PlaylistsRepository {
   // eslint-disable-next-line class-methods-use-this
   async updatePlaylist(playlist, patch = {}) {
     Object.assign(playlist, patch);
-    throw new Error('unimplemented');
-    // await playlist.save();
+    await playlist.save();
     return playlist;
   }
 
@@ -380,9 +379,8 @@ class PlaylistsRepository {
       totalQuery.executeTakeFirstOrThrow(),
     ]);
 
-    const playlistItems = playlistItemsRaw.map(playlistItemFromSelection)
+    const playlistItems = playlistItemsRaw.map(playlistItemFromSelection);
 
-    // `items` is the same shape as a PlaylistItem instance!
     return new Page(playlistItems, {
       pageSize: pagination.limit,
       filtered: Number(filtered.count),
@@ -465,23 +463,19 @@ class PlaylistsRepository {
   }
 
   /**
-   * Bulk create playlist items from arbitrary sources.
+   * Load media for all the given source type/source IDs.
    *
    * @param {User} user
-   * @param {PlaylistItemDesc[]} items
+   * @param {{ sourceType: string, sourceID: string }[]} items
    */
-  async createPlaylistItems(user, items) {
+  async resolveMedia(user, items) {
     const { db } = this.#uw;
-
-    if (!items.every(isValidPlaylistItem)) {
-      throw new Error('Cannot add a playlist item without a proper media source type and ID.');
-    }
 
     // Group by source so we can retrieve all unknown medias from the source in
     // one call.
     const itemsBySourceType = ObjectGroupBy(items, (item) => item.sourceType);
-    /** @type {{ mediaID: MediaID, artist: string, title: string, start: number, end: number }[]} */
-    const playlistItems = [];
+    /** @type {Map<string, Media>} */
+    const allMedias = new Map();
     const promises = Object.entries(itemsBySourceType).map(async ([sourceType, sourceItems]) => {
       const knownMedias = await db.selectFrom('media')
         .where('sourceType', '=', sourceType)
@@ -492,6 +486,7 @@ class PlaylistsRepository {
       /** @type {Set<string>} */
       const knownMediaIDs = new Set();
       knownMedias.forEach((knownMedia) => {
+        allMedias.set(`${knownMedia.sourceType}:${knownMedia.sourceID}`, knownMedia);
         knownMediaIDs.add(knownMedia.sourceID);
       });
 
@@ -503,53 +498,39 @@ class PlaylistsRepository {
         }
       });
 
-      let allMedias = knownMedias;
       if (unknownMediaIDs.length > 0) {
         // @ts-expect-error TS2322
         const unknownMedias = await this.#uw.source(sourceType)
           .get(user, unknownMediaIDs);
+        const toInsert = unknownMedias.map((media) => /** @type {Media} */ ({
+          sourceType: media.sourceType,
+          sourceID: media.sourceID,
+          sourceData: media.sourceData,
+          artist: media.artist,
+          title: media.title,
+          duration: media.duration,
+          thumbnail: media.thumbnail,
+        }));
         const inserted = await db.insertInto('media')
-          .values(unknownMedias.map((media) => ({
-            sourceType: media.sourceType,
-            sourceID: media.sourceID,
-            sourceData: media.sourceData,
-            artist: media.artist,
-            title: media.title,
-            duration: media.duration,
-            thumbnail: media.thumbnail,
-          })))
+          .values(toInsert)
           .returningAll()
           .execute();
-        allMedias = allMedias.concat(inserted);
-      }
 
-      for (const item of sourceItems) {
-        const media = allMedias.find((compare) => compare.sourceID === String(item.sourceID));
-        if (!media) {
-          throw new MediaNotFoundError({ sourceType: item.sourceType, sourceID: item.sourceID });
+        for (const media of inserted) {
+          allMedias.set(`${media.sourceType}:${media.sourceID}`, media);
         }
-        const { start, end } = getStartEnd(item, media);
-        playlistItems.push({
-          playlistID: playlist.id,
-          mediaID: media.id,
-          artist: item.artist ?? media.artist,
-          title: item.title ?? media.title,
-          start,
-          end,
-        });
       }
     });
 
     await Promise.all(promises);
 
-    if (playlistItems.length === 0) {
-      return [];
+    for (const item of items) {
+      if (!allMedias.has(`${item.sourceType}:${item.sourceID}`)) {
+        throw new MediaNotFoundError({ sourceType: item.sourceType, sourceID: item.sourceID });
+      }
     }
 
-    await db.insertInto('playlistItems')
-      .values(playlistItems)
-      .returningAll()
-      .execute();
+    return allMedias;
   }
 
   /**
@@ -571,22 +552,54 @@ class PlaylistsRepository {
       throw new UserNotFoundError({ id: playlist.userID });
     }
 
-    const newItems = await this.createPlaylistItems(user, items);
-    const oldMedia = playlist.media;
-    const insertIndex = after === null ? -1 : oldMedia.indexOf(after);
-    playlist.media = [
-      ...oldMedia.slice(0, insertIndex + 1),
-      ...newItems.map((item) => item.id),
-      ...oldMedia.slice(insertIndex + 1),
-    ];
+    const medias = await this.resolveMedia(user, items);
+    const playlistItems = items.map((item) => {
+      const media = medias.get(`${item.sourceType}:${item.sourceID}`);
+      if (media == null) {
+        throw new Error('resolveMedia() should have errored');
+      }
+      const { start, end } = getStartEnd(item, media);
+      return {
+        id: /** @type {PlaylistItemID} */ (randomUUID()),
+        playlistID: playlist.id,
+        mediaID: media.id,
+        artist: item.artist ?? media.artist,
+        title: item.title ?? media.title,
+        start,
+        end,
+      };
+    });
 
-    await playlist.save();
+    const result = await this.#uw.db.transaction().execute(async (tx) => {
+      const added = await tx.insertInto('playlistItems')
+        .returningAll()
+        .values(playlistItems)
+        .execute();
 
-    return {
-      added: newItems,
-      afterID: after,
-      playlistSize: playlist.media.length,
-    };
+      const { items: oldItems } = await tx.selectFrom('playlists')
+        .select('items')
+        .where('id', '=', playlist.id)
+        .executeTakeFirstOrThrow();
+      const insertIndex = after === null ? -1 : oldItems.indexOf(after);
+      const newItems = [
+        ...oldItems.slice(0, insertIndex + 1),
+        ...playlistItems.map((item) => item.id),
+        ...oldItems.slice(insertIndex + 1),
+      ];
+
+      await tx.updateTable('playlists')
+        .where('id', '=', playlist.id)
+        .set({ items: newItems })
+        .executeTakeFirstOrThrow();
+
+      return {
+        added: added,
+        afterID: after,
+        playlistSize: newItems.length,
+      };
+    });
+
+    return result;
   }
 
   /**
