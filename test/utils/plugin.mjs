@@ -9,7 +9,7 @@ async function testPlugin(uw) {
       username: `test_user_${i.toString(36)}`,
       slug: i.toString(36),
       email: `test${i.toString(36)}@example.com`,
-      hash: 'passwordhash',
+      password: 'passwordhash',
     };
     i += 1;
     return uw.db.insertInto('users')
