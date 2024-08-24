@@ -1,29 +1,9 @@
 import lodash from 'lodash';
-import escapeStringRegExp from 'escape-string-regexp';
+import { sql } from 'kysely';
 import { UserNotFoundError } from '../errors/index.js';
 import Page from '../Page.js';
 
-const { clamp, omit } = lodash;
-
-/**
- * @typedef {import('../schema.js').User} User
- * @typedef {import('../models/User.js').LeanBanned} LeanBanned
- * @typedef {LeanBanned & { user: Omit<LeanUser, 'banned'> }} Ban
- */
-
-/**
- * @param {User} user
- */
-function isValidBan(user) {
-  if (!user.banned) {
-    return false;
-  }
-  // Permanent ban.
-  if (!user.banned.expiresAt) {
-    return true;
-  }
-  return user.banned.expiresAt.getTime() > Date.now();
-}
+const { clamp } = lodash;
 
 class Bans {
   #uw;
@@ -38,11 +18,22 @@ class Bans {
   /**
    * Check whether a user is currently banned.
    *
-   * @param {User} user A user object.
+   * @param {import('../schema.js').User} user A user object.
    */
   // eslint-disable-next-line class-methods-use-this
   async isBanned(user) {
-    return isValidBan(user);
+    const { db } = this.#uw;
+
+    const ban = await db.selectFrom('bans')
+      .selectAll()
+      .where('userID', '=', user.id)
+      .where(({ or, eb }) => or([
+        eb('expiresAt', 'is', null),
+        eb('expiresAt', '>', sql`now()`)
+      ]))
+      .executeTakeFirst();
+
+    return ban != null;
   }
 
   /**
@@ -50,10 +41,9 @@ class Bans {
    *
    * @param {string} [filter] Optional filter to search for usernames.
    * @param {{ offset?: number, limit?: number }} [pagination] A pagination object.
-   * @return {Promise<Page<Ban, { offset: number, limit: number }>>}
    */
   async getBans(filter, pagination = {}) {
-    const { User } = this.#uw.models;
+    const { db } = this.#uw;
 
     const offset = pagination.offset ?? 0;
     const size = clamp(
@@ -62,35 +52,63 @@ class Bans {
       100,
     );
 
-    const queryFilter = {
-      banned: { $ne: null },
-      'banned.expiresAt': { $gt: new Date() },
-    };
+    let query = db.selectFrom('bans')
+      .innerJoin('users', 'users.id', 'bans.userID')
+      .leftJoin('users as mod', 'users.id', 'bans.moderatorID')
+      .select([
+        'users.id as users.id',
+        'users.username as users.username',
+        'users.slug as users.slug',
+        'users.createdAt as users.createdAt',
+        'users.updatedAt as users.updatedAt',
+        'mod.id as mod.id',
+        'mod.username as mod.username',
+        'mod.slug as mod.slug',
+        'mod.createdAt as mod.createdAt',
+        'mod.updatedAt as mod.updatedAt',
+        'bans.reason',
+        'bans.expiresAt',
+        'bans.createdAt',
+      ])
+      .where(({ eb, or }) => or([
+        eb('expiresAt', 'is', null),
+        eb('expiresAt', '>', sql`now()`),
+      ]));
+
     if (filter) {
-      Object.assign(queryFilter, {
-        username: { $regex: RegExp(escapeStringRegExp(filter), 'i') },
-      });
+      query = query.where('users.username', 'like', filter);
     }
 
-    const total = await User.find().where(queryFilter).countDocuments();
+    const { total } = await db.selectFrom('bans').select(eb => eb.fn.countAll().as('total')).executeTakeFirstOrThrow();
+    const { filtered } = await query.select(eb => eb.fn.countAll().as('filtered')).executeTakeFirstOrThrow();
 
-    /** @type {(import('../models/User.js').LeanUser & { banned: LeanBanned })[]} */
-    const bannedUsers = await User.find()
-      .where(queryFilter)
-      .skip(offset)
-      .limit(size)
-      .populate('banned.moderator')
-      .lean();
+    query = query.offset(offset).limit(size);
 
-    const results = bannedUsers.map((user) => ({
-      ...user.banned,
-      user: omit(user, ['banned']),
+    const bannedUsers = await query.execute();
+    const results = bannedUsers.map((row) => ({
+      user: {
+        id: row['users.id'],
+        username: row['users.username'],
+        slug: row['users.slug'],
+        createdAt: row['users.createdAt'],
+        updatedAt: row['users.updatedAt'],
+      },
+      moderator: {
+        id: row['mod.id'],
+        username: row['mod.username'],
+        slug: row['mod.slug'],
+        createdAt: row['mod.createdAt'],
+        updatedAt: row['mod.updatedAt'],
+      },
+      reason: row.reason,
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
     }));
 
     return new Page(results, {
       pageSize: pagination ? pagination.limit : undefined,
-      filtered: total,
-      total,
+      filtered: Number(filtered) ?? 0,
+      total: Number(total) ?? 0,
       current: { offset, limit: size },
       next: pagination ? { offset: offset + size, limit: size } : undefined,
       previous: offset > 0
@@ -100,67 +118,67 @@ class Bans {
   }
 
   /**
-   * @param {User} user
+   * @param {import('../schema.js').User} user
    * @param {object} options
    * @param {number} options.duration
-   * @param {User} options.moderator
+   * @param {import('../schema.js').User} options.moderator
    * @param {boolean} [options.permanent]
    * @param {string} [options.reason]
    */
   async ban(user, {
     duration, moderator, permanent = false, reason = '',
   }) {
+    const { db } = this.#uw;
+
     if (duration <= 0 && !permanent) {
       throw new Error('Ban duration should be at least 0ms.');
     }
 
-    const banned = {
-      duration: permanent ? -1 : duration,
-      expiresAt: permanent ? undefined : new Date(Date.now() + duration),
-      moderator: moderator._id,
-      reason,
+    const ban = {
+      userID: user.id,
+      moderatorID: moderator.id,
+      expiresAt: permanent ? null : new Date(Date.now() + duration),
+      reason: reason || null,
     };
-    user.banned = banned;
 
-    await user.save();
-    await user.populate('banned.moderator');
+    const _result = await db.insertInto('bans')
+      .values(ban)
+      .executeTakeFirstOrThrow();
 
     this.#uw.publish('user:ban', {
       userID: user.id,
       moderatorID: moderator.id,
-      duration: banned.duration,
-      expiresAt: banned.expiresAt ? banned.expiresAt.getTime() : null,
+      duration: 0,
+      expiresAt: ban.expiresAt ? ban.expiresAt.getTime() : null,
       permanent,
     });
 
-    return {
-      ...banned,
-      moderator,
-    };
+    return ban;
   }
 
   /**
    * @param {import('../schema.js').UserID} userID
    * @param {object} options
-   * @param {User} options.moderator
+   * @param {import('../schema.js').User} options.moderator
    */
   async unban(userID, { moderator }) {
-    const { users } = this.#uw;
+    const { db, users } = this.#uw;
 
     const user = await users.getUser(userID);
     if (!user) {
       throw new UserNotFoundError({ id: userID });
     }
-    if (!user.banned) {
+
+    const result = await db.deleteFrom('bans')
+      .where('userID', '=', userID)
+      .executeTakeFirst();
+    if (result.numDeletedRows === 0n) {
       throw new Error(`User "${user.username}" is not banned.`);
     }
 
-    user.banned = undefined;
-    await user.save();
-
     this.#uw.publish('user:unban', {
-      userID: `${user.id}`,
-      moderatorID: typeof moderator === 'object' ? `${moderator.id}` : moderator,
+      userID,
+      moderatorID: moderator.id,
     });
   }
 }

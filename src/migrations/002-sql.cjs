@@ -40,6 +40,15 @@ async function up({ context: uw }) {
     .addUniqueConstraint('user_email', ['email'])
     .execute();
 
+  await db.schema.createTable('bans')
+    .addColumn('user_id', 'uuid', (col) => col.primaryKey().references('users.id'))
+    .addColumn('moderator_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('expires_at', 'timestamp')
+    .addColumn('reason', 'text')
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(sql`now()`))
+    .execute();
+
   await db.schema.createTable('auth_services')
     .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
     .addColumn('service', 'text', (col) => col.notNull())

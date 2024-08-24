@@ -38,6 +38,16 @@ export interface UserTable {
   updatedAt: Generated<Date>,
 }
 
+export type Ban = Selected<BanTable>;
+export interface BanTable {
+  userID: UserID,
+  moderatorID: UserID,
+  expiresAt: Date | null,
+  reason: string | null,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
+}
+
 export type AuthService = Selected<AuthServiceTable>;
 export interface AuthServiceTable {
   userID: UserID,
@@ -105,6 +115,7 @@ export interface Database {
   migrations: MigrationTable,
   media: MediaTable,
   users: UserTable,
+  bans: BanTable,
   authServices: AuthServiceTable,
   playlists: PlaylistTable,
   playlistItems: PlaylistItemTable,
