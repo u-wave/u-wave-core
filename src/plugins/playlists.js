@@ -153,17 +153,15 @@ class PlaylistsRepository {
     const { db } = this.#uw;
 
     const playlist = await db.selectFrom('playlists')
-      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
       .where('userID', '=', user.id)
       .where('playlists.id', '=', id)
-      .groupBy('playlists.id')
       .select([
         'playlists.id',
         'playlists.userID',
         'playlists.name',
         'playlists.createdAt',
         'playlists.updatedAt',
-        db.fn.countAll().as('size'),
+        (eb) => sql`json_array_length(${eb.ref('playlists.items')})`.as('size'),
       ])
       .executeTakeFirst();
 
@@ -212,10 +210,13 @@ class PlaylistsRepository {
     const { db } = this.#uw;
 
     const playlists = await db.selectFrom('playlists')
-      .leftJoin('playlistItems', 'playlistItems.playlistID', 'playlists.id')
       .where('userID', '=', user.id)
-      .select(['playlists.id', 'name', db.fn.countAll().as('size'), 'playlists.createdAt'])
-      .groupBy('playlists.id')
+      .select([
+        'id',
+        'name',
+        (eb) => sql`json_array_length(${eb.ref('items')})`.as('size'),
+        'createdAt',
+      ])
       .execute();
 
     return playlists.map((playlist) => {
@@ -372,7 +373,8 @@ class PlaylistsRepository {
 
     const totalQuery = db.selectFrom('playlists')
       .select(sql`json_array_length(items)`.as('count'))
-      .where('id', '=', playlist.id);
+      .where('id', '=', playlist.id)
+      .executeTakeFirstOrThrow();
 
     const filteredQuery = filter == null ? totalQuery : db.selectFrom('playlistItems')
       .select((eb) => eb.fn.countAll().as('count'))
@@ -380,7 +382,8 @@ class PlaylistsRepository {
       .where((eb) => eb.or([
         eb('playlistItems.artist', 'like', filter),
         eb('playlistItems.title', 'like', filter),
-      ]));
+      ]))
+      .executeTakeFirstOrThrow();
 
     const [
       playlistItemsRaw,
@@ -388,8 +391,8 @@ class PlaylistsRepository {
       total,
     ] = await Promise.all([
       query.execute(),
-      filteredQuery.executeTakeFirstOrThrow(),
-      totalQuery.executeTakeFirstOrThrow(),
+      filteredQuery,
+      totalQuery,
     ]);
 
     const playlistItems = playlistItemsRaw.map(playlistItemFromSelection);
