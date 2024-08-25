@@ -43,7 +43,7 @@ describe('Bans', () => {
       user = await uw.users.getUser(user.id);
       assert.strictEqual(await uw.bans.isBanned(user), true);
 
-      await uw.bans.unban(user, { moderator });
+      await uw.bans.unban(user.id, { moderator });
       // refresh user data
       user = await uw.users.getUser(user.id);
       assert.strictEqual(await uw.bans.isBanned(user), false);
@@ -59,13 +59,14 @@ describe('Bans', () => {
 
     it('requires the users.bans.list role', async () => {
       const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('testBans', ['users.bans.list']);
 
       await supertest(uw.server)
         .get('/api/bans')
         .set('Cookie', `uwsession=${token}`)
         .expect(403);
 
-      await uw.acl.allow(user, ['users.bans.list']);
+      await uw.acl.allow(user, ['testBans']);
 
       await supertest(uw.server)
         .get('/api/bans')
@@ -75,7 +76,8 @@ describe('Bans', () => {
 
     it('returns bans', async () => {
       const token = await uw.test.createTestSessionToken(user);
-      await uw.acl.allow(user, ['users.bans.list', 'users.bans.add']);
+      await uw.acl.createRole('testBans', ['users.bans.list', 'users.bans.add']);
+      await uw.acl.allow(user, ['testBans']);
 
       const bannedUser = await uw.test.createUser();
       await uw.bans.ban(bannedUser, {

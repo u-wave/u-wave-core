@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import avvio from 'avvio';
 import { pino } from 'pino';
-import { CamelCasePlugin, Kysely, PostgresDialect, SqliteDialect } from 'kysely';
+import { CamelCasePlugin, Kysely, OperationNodeTransformer, PostgresDialect, SqliteDialect } from 'kysely';
 import httpApi, { errorHandling } from './HttpApi.js';
 import SocketServer from './SocketServer.js';
 import { Source } from './Source.js';
@@ -42,11 +42,53 @@ class SqliteDateColumnsPlugin {
   /** @param {string[]} dateColumns */
   constructor(dateColumns) {
     this.dateColumns = dateColumns;
+    this.transformer = new class extends OperationNodeTransformer {
+      /** @param {import('kysely').ValueNode} node */
+      transformValue (node) {
+        if (node.value instanceof Date) {
+          return { ...node, value: node.value.toISOString() };
+        }
+        return node;
+      }
+      /** @param {import('kysely').PrimitiveValueListNode} node */
+      transformPrimitiveValueList(node) {
+        return {
+          ...node,
+          values: node.values.map((value) => {
+            if (value instanceof Date) {
+              return value.toISOString();
+            }
+            return value;
+          }),
+        };
+      }
+      /** @param {import('kysely').ColumnUpdateNode} node */
+      transformColumnUpdate (node) {
+        /**
+         * @param {import('kysely').OperationNode} node
+         * @returns {node is import('kysely').ValueNode}
+         */
+        function isValueNode(node) {
+          return node.kind === 'ValueNode';
+        }
+
+        if (isValueNode(node.value) && node.value.value instanceof Date) {
+          return super.transformColumnUpdate({
+            ...node,
+            value: /** @type {import('kysely').ValueNode} */ ({
+              ...node.value,
+              value: node.value.value.toISOString(),
+            }),
+          });
+        }
+        return super.transformColumnUpdate(node);
+      }
+    };
   }
 
   /** @param {import('kysely').PluginTransformQueryArgs} args */
   transformQuery(args) {
-    return args.node;
+    return this.transformer.transformNode(args.node);
   }
 
   /** @param {import('kysely').PluginTransformResultArgs} args */
@@ -275,11 +317,6 @@ class UwaveServer extends EventEmitter {
     boot.use(booth);
 
     boot.use(errorHandling);
-
-    // boot.use(async () => {
-    //   const ids = await this.db.selectFrom('users').select('id').execute();
-    //   console.log(ids);
-    // });
   }
 
   /**
