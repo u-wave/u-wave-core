@@ -19,13 +19,6 @@ function boothRoutes() {
       schema(validations.skipBooth),
       route(controller.skipBooth),
     )
-    // POST /booth/replace - Replace the current DJ with someone else.
-    .post(
-      '/replace',
-      protect('booth.replace'),
-      schema(validations.replaceBooth),
-      route(controller.replaceBooth),
-    )
     // GET /booth/:historyID/vote - Get the current user's vote for the current play.
     .get(
       '/:historyID/vote',

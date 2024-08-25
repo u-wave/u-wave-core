@@ -42,6 +42,17 @@ async function up({ context: uw }) {
     .addUniqueConstraint('user_email', ['email'])
     .execute();
 
+  await db.schema.createTable('roles')
+    .addColumn('id', 'text', (col) => col.primaryKey())
+    .addColumn('permissions', 'jsonb', (col) => col.notNull())
+    .execute();
+
+  await db.schema.createTable('user_roles')
+    .addColumn('userID', 'uuid', (col) => col.references('users.id'))
+    .addColumn('role', 'text', (col) => col.references('roles.id'))
+    .addUniqueConstraint('unique_user_role', ['userID', 'role'])
+    .execute();
+
   await db.schema.createTable('bans')
     .addColumn('user_id', 'uuid', (col) => col.primaryKey().references('users.id'))
     .addColumn('moderator_id', 'uuid', (col) => col.notNull().references('users.id'))

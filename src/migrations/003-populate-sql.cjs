@@ -48,6 +48,27 @@ async function up({ context: uw }) {
       idMap.set(media._id.toString(), id);
     }
 
+    const roles = await models.AclRole.find().lean();
+    /** @type {Record<string, string[]>} */
+    const roleMap = Object.create(null);
+    for (const role of roles) {
+      if (role._id.includes('.') || role._id === '*') {
+        continue;
+      }
+
+      roleMap[role._id] = role.roles ?? [];
+    }
+    const permissionRows = Object.entries(roleMap).map(([role, permissions]) => ({
+      id: role,
+      permissions: jsonb(
+        permissions.flatMap((perm) => perm.includes('.') || perm === '*' ? [perm] : roleMap[perm])
+      ),
+    }));
+
+    await tx.insertInto('roles')
+      .values(permissionRows)
+      .execute();
+
     for await (const user of models.User.find().lean()) {
       const userID = randomUUID();
       idMap.set(user._id.toString(), userID);

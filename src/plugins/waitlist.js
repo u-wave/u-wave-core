@@ -9,6 +9,7 @@ import {
   UserIsPlayingError,
 } from '../errors/index.js';
 import routes from '../routes/waitlist.js';
+import { Permissions } from './acl.js';
 
 const schema = JSON.parse(
   fs.readFileSync(new URL('../schemas/waitlist.json', import.meta.url), 'utf8'),
@@ -188,14 +189,14 @@ class Waitlist {
 
     const isAddingOtherUser = moderator && user.id !== moderator.id;
     if (isAddingOtherUser) {
-      if (!(await acl.isAllowed(moderator, 'waitlist.add'))) {
+      if (!(await acl.isAllowed(moderator, Permissions.WaitlistAdd))) {
         throw new PermissionError({
           requiredRole: 'waitlist.add',
         });
       }
     }
 
-    const canForceJoin = await acl.isAllowed(user, 'waitlist.join.locked');
+    const canForceJoin = await acl.isAllowed(user, Permissions.WaitlistJoinLocked);
     if (!isAddingOtherUser && !canForceJoin && await this.isLocked()) {
       throw new WaitlistLockedError();
     }
@@ -283,7 +284,7 @@ class Waitlist {
     }
 
     const isRemoving = moderator && user.id !== moderator.id;
-    if (isRemoving && !(await acl.isAllowed(moderator, 'waitlist.remove'))) {
+    if (isRemoving && !(await acl.isAllowed(moderator, Permissions.WaitlistRemove))) {
       throw new PermissionError({
         requiredRole: 'waitlist.remove',
       });

@@ -220,7 +220,7 @@ class UwaveServer extends EventEmitter {
       log: ['query', 'error'],
     });
     this.mongo = mongoose.createConnection(this.options.mongo);
-    mongoose.set('debug', true);
+    // mongoose.set('debug', true);
 
     if (typeof options.redis === 'string') {
       this.redis = new Redis(options.redis, { lazyConnect: true });

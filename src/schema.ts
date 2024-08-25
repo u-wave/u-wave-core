@@ -6,6 +6,7 @@ export type MediaID = Tagged<string, 'MediaID'>;
 export type PlaylistID = Tagged<string, 'PlaylistID'>;
 export type PlaylistItemID = Tagged<string, 'PlaylistItemID'>;
 export type HistoryEntryID = Tagged<string, 'HistoryEntryID'>;
+export type Permission = Tagged<string, 'Permission'>;
 
 type Selected<T> = {
   [K in keyof T]: T[K] extends Generated<infer Inner> ? Inner : T[K];
@@ -36,6 +37,16 @@ export interface UserTable {
   pendingActivation: boolean,
   createdAt: Generated<Date>,
   updatedAt: Generated<Date>,
+}
+
+export interface UserRoleTable {
+  userID: UserID,
+  role: string,
+}
+
+export interface RoleTable {
+  id: string,
+  permissions: Permission[],
 }
 
 export type Ban = Selected<BanTable>;
@@ -115,6 +126,8 @@ export interface Database {
   migrations: MigrationTable,
   media: MediaTable,
   users: UserTable,
+  userRoles: UserRoleTable,
+  roles: RoleTable,
   bans: BanTable,
   authServices: AuthServiceTable,
   playlists: PlaylistTable,

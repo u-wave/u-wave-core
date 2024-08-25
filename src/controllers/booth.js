@@ -10,6 +10,7 @@ import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
+import { Permissions } from '../plugins/acl.js';
 
 /**
  * @typedef {import('../schema').UserID} UserID
@@ -118,7 +119,7 @@ async function skipBooth(req) {
     return toItemResponse({});
   }
 
-  if (!await acl.isAllowed(user, 'booth.skip.other')) {
+  if (!await acl.isAllowed(user, Permissions.SkipOther)) {
     throw new PermissionError({ requiredRole: 'booth.skip.other' });
   }
 
