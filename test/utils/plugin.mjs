@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import events from 'events';
 import jwt from 'jsonwebtoken';
 import WebSocket from 'ws';
@@ -6,6 +7,7 @@ async function testPlugin(uw) {
   let i = Date.now();
   function createUser() {
     const props = {
+      id: randomUUID(),
       username: `test_user_${i.toString(36)}`,
       slug: i.toString(36),
       email: `test${i.toString(36)}@example.com`,

@@ -72,6 +72,7 @@ async function createUwave(name, options) {
     ...options,
     port,
     redis: redisServer.url,
+    sqlite: ':memory:',
     mongo: mongoUrl,
     secret: Buffer.from(`secret_${name}`),
   });

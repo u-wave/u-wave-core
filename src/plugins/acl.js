@@ -162,7 +162,7 @@ class Acl {
 
     const permissions = await db.selectFrom('userRoles')
       .where('userID', '=', user.id)
-      .innerJoin('roles', 'id', 'userRoles.role')
+      .innerJoin('roles', 'roles.id', 'userRoles.role')
       .innerJoin(
         (eb) => jsonEach(eb.ref('roles.permissions')).as('permissions'),
         (join) => join,

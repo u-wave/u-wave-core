@@ -21,6 +21,7 @@ describe('Waitlist', () => {
           artist: `artist ${id}`,
           title: `title ${id}`,
           duration: 60,
+          thumbnail: 'https://placedog.net/280',
         }));
       },
       async search() {

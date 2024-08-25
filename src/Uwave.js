@@ -77,6 +77,7 @@ class SqliteDateColumnsPlugin {
  * >} RedisOptions
  * @typedef {{
  *   port?: number,
+ *   sqlite?: string,
  *   mongo?: string,
  *   redis?: string | RedisOptions,
  *   logger?: import('pino').LoggerOptions,
@@ -191,7 +192,7 @@ class UwaveServer extends EventEmitter {
       dialect: new SqliteDialect({
         async database() {
           const { default: Database } = await import('better-sqlite3');
-          const db = new Database('uwave_local.sqlite');
+          const db = new Database(options.sqlite ?? 'uwave_local.sqlite');
           db.pragma('journal_mode = WAL');
           db.pragma('foreign_keys = ON');
           db.function('json_array_shuffle', { directOnly: true }, (items) => {

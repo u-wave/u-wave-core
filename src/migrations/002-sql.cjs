@@ -20,7 +20,7 @@ async function up({ context: uw }) {
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('source_type', 'text', (col) => col.notNull())
     .addColumn('source_id', 'text', (col) => col.notNull())
-    .addColumn('source_data', 'jsonb', (col) => col.notNull())
+    .addColumn('source_data', 'jsonb')
     .addColumn('artist', 'text', (col) => col.notNull())
     .addColumn('title', 'text', (col) => col.notNull())
     .addColumn('duration', 'integer', (col) => col.notNull())

@@ -306,7 +306,7 @@ class PlaylistsRepository {
       .where('playlistItems.playlistID', '=', playlist.id)
       .where('playlistItems.id', '=', (eb) => {
         /** @type {import('kysely').RawBuilder<PlaylistItemID>} */
-        const item =  sql`items[${order}]`
+        const item =  sql`items->>${order}`
         return eb.selectFrom('playlists')
           .select(item.as('playlistItemID'))
           .where('id', '=', playlist.id)
@@ -502,6 +502,7 @@ class PlaylistsRepository {
         const unknownMedias = await this.#uw.source(sourceType)
           .get(user, unknownMediaIDs);
         const toInsert = unknownMedias.map((media) => /** @type {Media} */ ({
+          id: /** @type {MediaID} */ (randomUUID()),
           sourceType: media.sourceType,
           sourceID: media.sourceID,
           sourceData: jsonb(media.sourceData),
@@ -588,7 +589,7 @@ class PlaylistsRepository {
 
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)
-        .set({ items: newItems })
+        .set({ items: jsonb(newItems) })
         .executeTakeFirstOrThrow();
 
       return {

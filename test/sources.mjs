@@ -13,19 +13,29 @@ describe('Media Sources', () => {
     await uw.destroy();
   });
 
+  function makeTestMedia(sourceID) {
+    return {
+      sourceType: 'test-source',
+      sourceID,
+      artist: `artist ${sourceID}`,
+      title: `title ${sourceID}`,
+      thumbnail: 'https://placedog.net/280',
+    };
+  }
+
   const testSourceObject = {
     name: 'test-source',
     async search(query) {
-      return [{ sourceID: query }];
+      return [makeTestMedia(query)];
     },
     async get(ids) {
-      return ids.map((sourceID) => ({ sourceID }));
+      return ids.map((sourceID) => makeTestMedia(sourceID));
     },
   };
 
   function testSource() {
     const search = async (query) => [{ sourceID: query }];
-    const get = async (ids) => ids.map((sourceID) => ({ sourceID }));
+    const get = async (ids) => ids.map((sourceID) => makeTestMedia(sourceID));
     return {
       name: 'test-source',
       search,

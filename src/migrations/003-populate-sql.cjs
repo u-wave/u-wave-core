@@ -65,9 +65,11 @@ async function up({ context: uw }) {
       ),
     }));
 
-    await tx.insertInto('roles')
-      .values(permissionRows)
-      .execute();
+    if (permissionRows.length > 0) {
+      await tx.insertInto('roles')
+        .values(permissionRows)
+        .execute();
+    }
 
     for await (const user of models.User.find().lean()) {
       const userID = randomUUID();
