@@ -22,6 +22,7 @@ import acl from './plugins/acl.js';
 import waitlist from './plugins/waitlist.js';
 import passport from './plugins/passport.js';
 import migrations from './plugins/migrations.js';
+import lodash from 'lodash';
 
 const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
@@ -193,6 +194,16 @@ class UwaveServer extends EventEmitter {
           const db = new Database('uwave_local.sqlite');
           db.pragma('journal_mode = WAL');
           db.pragma('foreign_keys = ON');
+          db.function('json_array_shuffle', { directOnly: true }, (items) => {
+            if (typeof items !== 'string') {
+              throw new TypeError('json_array_shuffle(): items must be JSON string');
+            }
+            items = JSON.parse(items);
+            if (!Array.isArray(items)) {
+              throw new TypeError('json_array_shuffle(): items must be JSON array');
+            }
+            return JSON.stringify(lodash.shuffle(items));
+          });
           return db;
         },
       }),

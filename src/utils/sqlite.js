@@ -27,11 +27,45 @@ export function jsonLength(expr) {
   return sql`json_array_length(${expr})`
 }
 
-/** @param {import('type-fest').Jsonifiable} value */
+/**
+ * @param {import('type-fest').Jsonifiable} value
+ * @returns {import('kysely').RawBuilder<any>}
+ */
 export function jsonb(value) {
   return sql`jsonb(${JSON.stringify(value)})`;
 }
 
+/**
+ * @template {unknown[]} T
+ * @param {import('kysely').Expression<T>} expr
+ * @returns {import('kysely').RawBuilder<T>}
+ */
+export function json(expr) {
+  return sql`json(${expr})`;
+}
+
+/**
+ * @template {unknown[]} T
+ * @param {import('kysely').Expression<T>} expr
+ * @returns {import('kysely').RawBuilder<T>}
+ */
+export function arrayShuffle(expr) {
+  return sql`jsonb(json_array_shuffle(${json(expr)}))`;
+}
+
+/**
+ * @template {unknown[]} T
+ * @param {import('kysely').Expression<T>} expr
+ * @returns {import('kysely').RawBuilder<T>}
+ */
+export function arrayCycle(expr) {
+  return sql`
+    CASE ${jsonLength(expr)}
+      WHEN 0 THEN (${expr})
+      ELSE jsonb_insert(jsonb_remove((${expr}), '$[0]'), '$[#]', (${expr})->>0))
+    END
+  `
+}
+
 /** @type {import('kysely').RawBuilder<Date>} */
 export const now = sql`(strftime('%FT%T', 'now'))`;
-

@@ -9,7 +9,7 @@ import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { jsonb, jsonEach, jsonLength } from '../utils/sqlite.js';
+import { arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -247,7 +247,7 @@ class PlaylistsRepository {
 
     await db.updateTable('playlists')
       .where('id', '=', playlist.id)
-      .set({ items: sql`array_append(items[2:], items[1])` })
+      .set('items', (eb) => arrayCycle(eb.ref('items')))
       .execute();
   }
 
@@ -259,7 +259,7 @@ class PlaylistsRepository {
 
     await db.updateTable('playlists')
       .where('id', '=', playlist.id)
-      .set({ items: sql`array_shuffle(items)` })
+      .set('items', (eb) => arrayShuffle(eb.ref('items')))
       .execute();
   }
 
