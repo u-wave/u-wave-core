@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import defaultRoles from '../config/defaultRoles.js';
 import routes from '../routes/acl.js';
 import { jsonb, jsonEach } from '../utils/sqlite.js';
@@ -73,11 +74,14 @@ class Acl {
   async getAllRoles() {
     const { db } = this.#uw;
 
-    const list = await db.selectFrom('roles').selectAll().execute();
+    // TODO: `json()` should be strongly typed
+    const list = await db.selectFrom('roles')
+      .select(['id', sql`json(permissions)`.as('permissions')])
+      .execute();
 
     const roles = Object.fromEntries(list.map((role) => [
       role.id,
-      role.permissions,
+      /** @type {Permission[]} */ (JSON.parse(/** @type {string} */ (role.permissions))),
     ]));
 
     return roles;
@@ -92,6 +96,7 @@ class Acl {
 
     await db.insertInto('roles')
       .values({ id: name, permissions: jsonb(permissions) })
+      .onConflict((conflict) => conflict.column('id').doUpdateSet({ permissions: jsonb(permissions) }))
       .execute();
 
     return { name, permissions };

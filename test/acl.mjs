@@ -27,7 +27,7 @@ describe('ACL', () => {
   it('can allow users to do things', async () => {
     assert.strictEqual(await uw.acl.isAllowed(user, 'test.perm'), false);
 
-    await uw.acl.allow(user, ['test.perm']);
+    await uw.acl.allow(user, ['testRole']);
     assert.strictEqual(await uw.acl.isAllowed(user, 'test.perm'), true);
   });
 
@@ -63,14 +63,15 @@ describe('ACL', () => {
 
   describe('GET /roles', () => {
     it('lists available roles', async () => {
-      await uw.acl.createRole('testRole', ['test.permission', 'test.permission2']);
+      await uw.acl.createRole('testRole2', ['test.permission', 'test.permission2']);
 
       const res = await supertest(uw.server)
         .get('/api/roles')
         .expect(200);
 
       sinon.assert.match(res.body.data, {
-        'testRole': ['test.permission', 'test.permission2'],
+        'testRole': ['test.perm'],
+        'testRole2': ['test.permission', 'test.permission2'],
       });
     });
   });
@@ -89,17 +90,18 @@ describe('ACL', () => {
       const token = await uw.test.createTestSessionToken(user);
 
       await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({
           permissions: ['test.permission', 'test.permission2'],
         })
         .expect(403);
 
-      await uw.acl.allow(user, ['acl.create']);
+      await uw.acl.createRole('roleAuthor', ['acl.create']);
+      await uw.acl.allow(user, ['roleAuthor']);
 
       await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({
           permissions: ['test.permission', 'test.permission2'],
@@ -109,10 +111,11 @@ describe('ACL', () => {
 
     it('validates input', async () => {
       const token = await uw.test.createTestSessionToken(user);
-      await uw.acl.allow(user, ['acl.create']);
+      await uw.acl.createRole('roleAuthor', ['acl.create']);
+      await uw.acl.allow(user, ['roleAuthor']);
 
       let res = await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({})
         .expect(400);
@@ -122,7 +125,7 @@ describe('ACL', () => {
       });
 
       res = await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({ permissions: 'not an array' })
         .expect(400);
@@ -132,7 +135,7 @@ describe('ACL', () => {
       });
 
       res = await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({ permissions: [{ not: 'a' }, 'string'] })
         .expect(400);
@@ -144,10 +147,11 @@ describe('ACL', () => {
 
     it('creates a role', async () => {
       const token = await uw.test.createTestSessionToken(user);
-      await uw.acl.allow(user, ['acl.create']);
+      await uw.acl.createRole('roleAuthor', ['acl.create']);
+      await uw.acl.allow(user, ['roleAuthor']);
 
       const res = await supertest(uw.server)
-        .put('/api/roles/testRole')
+        .put('/api/roles/newRole')
         .set('Cookie', `uwsession=${token}`)
         .send({
           permissions: ['test.permission', 'test.permission2'],
@@ -155,7 +159,7 @@ describe('ACL', () => {
         .expect(201);
 
       sinon.assert.match(res.body.data, {
-        name: 'testRole',
+        name: 'newRole',
         permissions: ['test.permission', 'test.permission2'],
       });
     });
@@ -180,7 +184,8 @@ describe('ACL', () => {
         .set('Cookie', `uwsession=${token}`)
         .expect(403);
 
-      await uw.acl.allow(user, ['acl.delete']);
+      await uw.acl.createRole('roleDeleter', ['acl.delete']);
+      await uw.acl.allow(user, ['roleDeleter']);
 
       await supertest(uw.server)
         .delete('/api/roles/testRole')
@@ -193,10 +198,12 @@ describe('ACL', () => {
       const token = await uw.test.createTestSessionToken(moderator);
 
       await uw.acl.createRole('testRole', ['test.permission', 'test.permission2']);
-      await uw.acl.allow(user, ['testRole']);
-      await uw.acl.allow(moderator, ['acl.delete']);
+      await uw.acl.createRole('roleDeleter', ['acl.delete']);
 
-      assert(await uw.acl.isAllowed(user, 'testRole'));
+      await uw.acl.allow(user, ['testRole']);
+      await uw.acl.allow(moderator, ['roleDeleter']);
+
+      assert(await uw.acl.isAllowed(user, 'test.permission2'));
 
       await supertest(uw.server)
         .delete('/api/roles/testRole')
@@ -208,7 +215,7 @@ describe('ACL', () => {
         .expect(200);
       assert(!Object.keys(res.body.data).includes('testRole'));
 
-      assert(!await uw.acl.isAllowed(user, 'testRole'));
+      assert(!await uw.acl.isAllowed(user, 'test.permission2'));
     });
   });
 });
