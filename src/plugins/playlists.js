@@ -614,10 +614,12 @@ class PlaylistsRepository {
         .values(playlistItems)
         .execute();
 
-      const { items: oldItems } = await tx.selectFrom('playlists')
-        .select('items')
+      const result = await tx.selectFrom('playlists')
+        .select(sql`json(items)`.as('items'))
         .where('id', '=', playlist.id)
         .executeTakeFirstOrThrow();
+
+      const oldItems = result?.items ? JSON.parse(/** @type {string} */ (result.items)) : [];
       const insertIndex = after === null ? -1 : oldItems.indexOf(after);
       const newItems = [
         ...oldItems.slice(0, insertIndex + 1),
@@ -663,11 +665,12 @@ class PlaylistsRepository {
 
     await db.transaction().execute(async (tx) => {
       const result = await tx.selectFrom('playlists')
-        .select('items')
+        .select(sql`json(items)`.as('items'))
         .where('id', '=', playlist.id)
         .executeTakeFirst();
 
-      const itemIDsInPlaylist = new Set(result?.items ?? []);
+      const items = result?.items ? JSON.parse(/** @type {string} */ (result.items)) : [];
+      const itemIDsInPlaylist = new Set(items);
       const itemIDsToMove = new Set(itemIDs.filter((itemID) => itemIDsInPlaylist.has(itemID)));
 
       /** @type {PlaylistItemID[]} */
@@ -692,7 +695,7 @@ class PlaylistsRepository {
 
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)
-        .set('items', newItemIDs)
+        .set('items', jsonb(newItemIDs))
         .execute();
     });
 
