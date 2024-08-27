@@ -142,10 +142,10 @@ async function updatePlaylist(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  await playlists.updatePlaylist(playlist, patch);
+  const updatedPlaylist = await playlists.updatePlaylist(playlist, patch);
 
   return toItemResponse(
-    serializePlaylist(playlist),
+    serializePlaylist(updatedPlaylist),
     { url: req.fullUrl },
   );
 }
@@ -173,10 +173,10 @@ async function renamePlaylist(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  await playlists.updatePlaylist(playlist, { name });
+  const updatedPlaylist = await playlists.updatePlaylist(playlist, { name });
 
   return toItemResponse(
-    serializePlaylist(playlist),
+    serializePlaylist(updatedPlaylist),
     { url: req.fullUrl },
   );
 }

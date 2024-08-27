@@ -180,7 +180,7 @@ describe('Playlists', () => {
 
   describe('PATCH /playlists/:id', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .patch(`/api/playlists/${fakeID}`)
@@ -188,7 +188,7 @@ describe('Playlists', () => {
     });
 
     it('validates input', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
       const token = await uw.test.createTestSessionToken(user);
 
       await supertest(uw.server)
@@ -256,7 +256,7 @@ describe('Playlists', () => {
 
   describe('PUT /playlists/:id/rename', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .put(`/api/playlists/${fakeID}/rename`)
@@ -264,7 +264,7 @@ describe('Playlists', () => {
     });
 
     it('validates input', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
       const token = await uw.test.createTestSessionToken(user);
 
       await supertest(uw.server)
@@ -326,7 +326,7 @@ describe('Playlists', () => {
 
   describe('PUT /playlists/:id/activate', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .put(`/api/playlists/${fakeID}/activate`)

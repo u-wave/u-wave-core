@@ -239,14 +239,25 @@ class PlaylistsRepository {
 
   /**
    * @param {Playlist} playlist
-   * @param {Partial<Playlist>} patch
-   * @returns {Promise<Playlist>}
+   * @param {Partial<Pick<Playlist, 'name'>>} patch
    */
-  // eslint-disable-next-line class-methods-use-this
   async updatePlaylist(playlist, patch = {}) {
-    Object.assign(playlist, patch);
-    await playlist.save();
-    return playlist;
+    const { db } = this.#uw;
+
+    const updatedPlaylist = await db.updateTable('playlists')
+      .where('id', '=', playlist.id)
+      .set(patch)
+      .returning([
+        'id',
+        'userID',
+        'name',
+        (eb) => jsonLength(eb.ref('items')).as('size'),
+        'createdAt',
+        'updatedAt',
+      ])
+      .executeTakeFirstOrThrow();
+
+    return updatedPlaylist;
   }
 
   /**
