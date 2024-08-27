@@ -33,6 +33,7 @@ export interface UserTable {
   email: string | null,
   password: string | null,
   slug: string,
+  avatar: string | null,
   activePlaylistID: PlaylistID | null,
   pendingActivation: boolean,
   createdAt: Generated<Date>,

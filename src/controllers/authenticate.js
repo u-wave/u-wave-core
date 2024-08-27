@@ -15,6 +15,7 @@ import sendEmail from '../email.js';
 import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
+import { serializeUser } from '../utils/serialize.js';
 
 const { BadRequest } = httpErrors;
 
@@ -48,7 +49,7 @@ function seconds(str) {
  * @type {import('../types.js').Controller}
  */
 async function getCurrentUser(req) {
-  return toItemResponse(req.user ?? null, {
+  return toItemResponse(req.user != null ? serializeUser(req.user) : null, {
     url: req.fullUrl,
   });
 }

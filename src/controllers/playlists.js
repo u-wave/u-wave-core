@@ -75,7 +75,7 @@ async function createPlaylist(req) {
   const { name } = req.body;
   const { playlists } = req.uwave;
 
-  const playlist = await playlists.createPlaylist(user, {
+  const { playlist, active } = await playlists.createPlaylist(user, {
     name,
   });
 
@@ -83,7 +83,7 @@ async function createPlaylist(req) {
     serializePlaylist(playlist),
     {
       url: req.fullUrl,
-      meta: { active: user.activePlaylistID === playlist.id },
+      meta: { active },
     },
   );
 }

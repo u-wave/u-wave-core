@@ -1,5 +1,5 @@
 /**
- * @param {import('../schema.js').Playlist} model
+ * @param {import('../schema.js').Playlist & { size: number }} model
  */
 export function serializePlaylist(model) {
   return {

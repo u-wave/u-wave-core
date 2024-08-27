@@ -61,7 +61,7 @@ class ImportContext extends SourceContext {
    * @returns {Promise<Playlist>} Playlist model.
    */
   async createPlaylist(name, itemOrItems) {
-    const playlist = await this.uw.playlists.createPlaylist(this.user, { name });
+    const { playlist } = await this.uw.playlists.createPlaylist(this.user, { name });
 
     const rawItems = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
     const items = this.source.addSourceType(rawItems);

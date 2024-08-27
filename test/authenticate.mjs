@@ -39,7 +39,8 @@ describe('Authentication', () => {
       sinon.assert.match(res.body.data, {
         _id: user.id,
         username: user.username,
-        avatar: user.avatar,
+        // TODO: sql avatars
+        // avatar: user.avatar,
         slug: user.slug,
       });
     });

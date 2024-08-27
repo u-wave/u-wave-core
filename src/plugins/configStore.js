@@ -2,12 +2,11 @@ import fs from 'node:fs';
 import EventEmitter from 'node:events';
 import Ajv from 'ajv/dist/2019.js';
 import formats from 'ajv-formats';
-import lodash from 'lodash';
 import jsonMergePatch from 'json-merge-patch';
 import sjson from 'secure-json-parse';
 import ValidationError from '../errors/ValidationError.js';
-
-const { omit } = lodash;
+import { sql } from 'kysely';
+import { jsonb } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('type-fest').JsonObject} JsonObject
@@ -113,16 +112,16 @@ class ConfigStore {
 
     const previous = await db.transaction().execute(async (tx) => {
       const row = await tx.selectFrom('configuration')
-        .select('value')
+        .select(sql`json(value)`.as('value'))
         .where('name', '=', name)
         .executeTakeFirst();
 
       await tx.insertInto('configuration')
-        .values({ name, value })
-        .onConflict((oc) => oc.column('name').doUpdateSet({ value }))
+        .values({ name, value: jsonb(value) })
+        .onConflict((oc) => oc.column('name').doUpdateSet({ value: jsonb(value) }))
         .execute();
 
-      return row?.value ?? null;
+      return row?.value != null ? JSON.parse(/** @type {string} */ (row.value)) : null;
     });
 
     return previous;
@@ -136,14 +135,14 @@ class ConfigStore {
     const { db } = this.#uw;
 
     const row = await db.selectFrom('configuration')
-      .select(['value'])
+      .select(sql`json(value)`.as('value'))
       .where('name', '=', key)
       .executeTakeFirst();
     if (!row) {
       return null;
     }
 
-    return row.value;
+    return JSON.parse(/** @type {string} */ (row.value));
   }
 
   /**
@@ -217,15 +216,16 @@ class ConfigStore {
     const { db } = this.#uw;
 
     const results = await db.selectFrom('configuration')
-      .select(['name', 'value'])
+      .select(['name', sql`json(value)`.as('value')])
       .execute();
 
     const configs = Object.create(null);
     for (const [key, validate] of this.#validators.entries()) {
       const row = results.find((m) => m.name === key);
       if (row) {
-        validate(row.value);
-        configs[key] = row.value;
+        const value = JSON.parse(/** @type {string} */ (row.value));
+        validate(value);
+        configs[key] = value;
       } else {
         configs[key] = {};
       }

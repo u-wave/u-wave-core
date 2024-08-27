@@ -188,10 +188,19 @@ class PlaylistsRepository {
         id,
         name,
         userID: user.id,
+        items: jsonb([]),
       })
-      .returningAll()
+      .returning([
+        'id',
+        'userID',
+        'name',
+        (eb) => jsonLength(eb.ref('items')).as('size'),
+        'createdAt',
+        'updatedAt',
+      ])
       .executeTakeFirstOrThrow();
 
+    let active = false;
     // If this is the user's first playlist, immediately activate it.
     if (user.activePlaylistID == null) {
       this.#logger.info({ userId: user.id, playlistId: playlist.id }, 'activating first playlist');
@@ -199,9 +208,10 @@ class PlaylistsRepository {
         .where('users.id', '=', user.id)
         .set({ activePlaylistID: playlist.id })
         .execute();
+      active = true;
     }
 
-    return playlist;
+    return { playlist, active };
   }
 
   /**
@@ -214,9 +224,11 @@ class PlaylistsRepository {
       .where('userID', '=', user.id)
       .select([
         'id',
+        'userID',
         'name',
         (eb) => jsonLength(eb.ref('items')).as('size'),
         'createdAt',
+        'updatedAt',
       ])
       .execute();
 
@@ -411,7 +423,14 @@ class PlaylistsRepository {
     const { db } = this.#uw;
 
     let query = db.selectFrom('playlists')
-      .select(['playlists.id', 'playlists.name', 'playlists.createdAt'])
+      .select([
+        'playlists.id',
+        'playlists.userID',
+        'playlists.name',
+        (eb) => jsonLength(eb.ref('playlists.items')).as('size'),
+        'playlists.createdAt',
+        'playlists.updatedAt',
+      ])
       .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
       .where('playlistItems.mediaID', '=', mediaID)
       .groupBy('playlistItems.playlistID')
@@ -440,7 +459,15 @@ class PlaylistsRepository {
 
     let query = db.selectFrom('playlists')
       .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
-      .select(['playlists.id', 'playlists.name', 'playlists.createdAt', 'playlistItems.mediaID'])
+      .select([
+        'playlists.id',
+        'playlists.userID',
+        'playlists.name',
+        (eb) => jsonLength(eb.ref('playlists.items')).as('size'),
+        'playlists.createdAt',
+        'playlists.updatedAt',
+        'playlistItems.mediaID',
+      ])
       .where('playlistItems.mediaID', 'in', mediaIDs);
     if (options.author) {
       query = query.where('playlists.userID', '=', options.author)
