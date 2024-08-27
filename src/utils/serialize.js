@@ -13,9 +13,7 @@ export function serializePlaylist(model) {
 }
 
 /**
- * @param {Pick<import('../schema.js').User,
- *   'id' | 'username' | 'slug' | 'roles' | 'avatar' |
- *   'createdAt' | 'updatedAt' | 'lastSeenAt'>} model
+ * @param {import('../schema.js').User} model
  */
 export function serializeUser(model) {
   return {
@@ -24,6 +22,7 @@ export function serializeUser(model) {
     slug: model.slug,
     roles: model.roles,
     avatar: model.avatar,
+    activePlaylist: model.activePlaylistID,
     createdAt: model.createdAt.toISOString(),
     updatedAt: model.updatedAt?.toISOString(),
     lastSeenAt: model.lastSeenAt?.toISOString(),
