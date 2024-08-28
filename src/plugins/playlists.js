@@ -618,17 +618,20 @@ class PlaylistsRepository {
     });
 
     const result = await this.#uw.db.transaction().execute(async (tx) => {
-      await tx.insertInto('playlistItems')
-        .values(playlistItems.map((item) => ({
-          id: item.id,
-          playlistID: playlist.id,
-          mediaID: item.media.id,
-          artist: item.artist,
-          title: item.title,
-          start: item.start,
-          end: item.end,
-        })))
-        .execute();
+      for (const item of playlistItems) {
+        // TODO: use a prepared statement
+        await tx.insertInto('playlistItems')
+          .values({
+            id: item.id,
+            playlistID: playlist.id,
+            mediaID: item.media.id,
+            artist: item.artist,
+            title: item.title,
+            start: item.start,
+            end: item.end,
+          })
+          .execute();
+      }
 
       const result = await tx.selectFrom('playlists')
         .select(sql`json(items)`.as('items'))
