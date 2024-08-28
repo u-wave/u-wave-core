@@ -10,6 +10,7 @@ import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle } from '../utils/sqlite.js';
+import Multimap from '../utils/Multimap.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -34,16 +35,6 @@ import { arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle }
  */
 
 /**
- * @param {PlaylistItemDesc} item
- * @returns {boolean}
- */
-function isValidPlaylistItem(item) {
-  return typeof item === 'object'
-    && typeof item.sourceType === 'string'
-    && (typeof item.sourceID === 'string' || typeof item.sourceID === 'number');
-}
-
-/**
  * Calculate valid start/end times for a playlist item.
  *
  * @param {PlaylistItemDesc} item
@@ -62,22 +53,6 @@ function getStartEnd(item, media) {
     end = start;
   }
   return { start, end };
-}
-
-/**
- * @param {PlaylistItemDesc} itemProps
- * @param {Media} media
- */
-function toPlaylistItem(itemProps, media) {
-  const { artist, title } = itemProps;
-  const { start, end } = getStartEnd(itemProps, media);
-  return {
-    mediaID: media.id,
-    artist: artist ?? media.artist,
-    title: title ?? media.title,
-    start,
-    end,
-  };
 }
 
 const playlistItemSelection = /** @type {const} */ ([
@@ -178,7 +153,6 @@ function playlistItemFromSelectionNew (raw) {
     },
   }
 }
-
 
 class PlaylistsRepository {
   #uw;
@@ -505,13 +479,15 @@ class PlaylistsRepository {
    *
    * @param {MediaID[]} mediaIDs
    * @param {{ author?: UserID }} options
-   * @returns A map of stringified `Media` `ObjectId`s to the Playlist objects that contain them.
+   * @returns A map of media IDs to the Playlist objects that contain them.
    */
   async getPlaylistsContainingAnyMedia(mediaIDs, options = {}) {
     const { db } = this.#uw;
 
+    /** @type {Multimap<MediaID, Playlist>} */
+    const playlistsByMediaID = new Multimap();
     if (mediaIDs.length === 0) {
-      return new Map();
+      return playlistsByMediaID;
     }
 
     let query = db.selectFrom('playlists')
@@ -531,16 +507,9 @@ class PlaylistsRepository {
     }
 
     const playlists = await query.execute();
-
-    const playlistsByMediaID = new Map();
-    playlists.forEach(({ mediaID, ...playlist }) => {
-      const playlists = playlistsByMediaID.get(mediaID);
-      if (playlists) {
-        playlists.push(playlist);
-      } else {
-        playlistsByMediaID.set(mediaID, [playlist]);
-      }
-    });
+    for (const { mediaID, ...playlist } of playlists) {
+      playlistsByMediaID.set(mediaID, playlist);
+    }
 
     return playlistsByMediaID;
   }
