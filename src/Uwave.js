@@ -41,7 +41,7 @@ class UwCamelCasePlugin extends CamelCasePlugin {
 class SqliteDateColumnsPlugin {
   /** @param {string[]} dateColumns */
   constructor(dateColumns) {
-    this.dateColumns = dateColumns;
+    this.dateColumns = new Set(dateColumns);
     this.transformer = new class extends OperationNodeTransformer {
       /** @param {import('kysely').ValueNode} node */
       transformValue (node) {
@@ -91,13 +91,22 @@ class SqliteDateColumnsPlugin {
     return this.transformer.transformNode(args.node);
   }
 
+  /** @param {string} col */
+  #isDateColumn(col) {
+    if (this.dateColumns.has(col)) {
+      return true;
+    }
+    const i = col.lastIndexOf('.');
+    return i !== -1 && this.dateColumns.has(col.slice(i));
+  }
+
   /** @param {import('kysely').PluginTransformResultArgs} args */
   async transformResult(args) {
     for (const row of args.result.rows) {
-      for (const col of this.dateColumns) {
-        if (col in row && row[col] != null) {
+      for (let col in row) {
+        if (this.#isDateColumn(col)) {
           const value = row[col];
-          if (typeof value === 'string' || typeof value === 'number') {
+          if (typeof value === 'string') {
             row[col] = new Date(value);
           }
         }

@@ -20,13 +20,8 @@ describe('Bans', () => {
       assert.strictEqual(await uw.bans.isBanned(user), false);
     });
     it('returns true for banned users', async () => {
-      user.banned = {
-        duration: 1000,
-        expiresAt: Date.now() + 1000,
-      };
-      await user.save();
-      // refresh user data
-      user = await uw.users.getUser(user.id);
+      const moderator = await uw.test.createUser();
+      await uw.bans.ban(user, { moderator, permanent: true, duration: 0 });
       assert.strictEqual(await uw.bans.isBanned(user), true);
     });
   });
@@ -39,13 +34,9 @@ describe('Bans', () => {
         moderator,
         duration: ms('10 hours'),
       });
-      // refresh user data
-      user = await uw.users.getUser(user.id);
       assert.strictEqual(await uw.bans.isBanned(user), true);
 
       await uw.bans.unban(user.id, { moderator });
-      // refresh user data
-      user = await uw.users.getUser(user.id);
       assert.strictEqual(await uw.bans.isBanned(user), false);
     });
   });
