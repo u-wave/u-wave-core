@@ -577,11 +577,6 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @param {PlaylistItemDesc[]} items
    * @param {{ after?: PlaylistItemID|null }} options
-   * @returns {Promise<{
-   *   added: PlaylistItem[],
-   *   afterID: PlaylistItemID?,
-   *   playlistSize: number,
-   * }>}
    */
   async addPlaylistItems(playlist, items, { after = null } = {}) {
     const { users } = this.#uw;
@@ -599,8 +594,7 @@ class PlaylistsRepository {
       const { start, end } = getStartEnd(item, media);
       return {
         id: /** @type {PlaylistItemID} */ (randomUUID()),
-        playlistID: playlist.id,
-        mediaID: media.id,
+        media: media,
         artist: item.artist ?? media.artist,
         title: item.title ?? media.title,
         start,
@@ -609,9 +603,16 @@ class PlaylistsRepository {
     });
 
     const result = await this.#uw.db.transaction().execute(async (tx) => {
-      const added = await tx.insertInto('playlistItems')
-        .returningAll()
-        .values(playlistItems)
+      await tx.insertInto('playlistItems')
+        .values(playlistItems.map((item) => ({
+          id: item.id,
+          playlistID: playlist.id,
+          mediaID: item.media.id,
+          artist: item.artist,
+          title: item.title,
+          start: item.start,
+          end: item.end,
+        })))
         .execute();
 
       const result = await tx.selectFrom('playlists')
@@ -633,7 +634,7 @@ class PlaylistsRepository {
         .executeTakeFirstOrThrow();
 
       return {
-        added: added,
+        added: playlistItems,
         afterID: after,
         playlistSize: newItems.length,
       };

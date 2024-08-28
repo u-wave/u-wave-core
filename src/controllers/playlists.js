@@ -1,5 +1,5 @@
 import { HTTPError, PlaylistNotFoundError, PlaylistItemNotFoundError } from '../errors/index.js';
-import { serializePlaylist } from '../utils/serialize.js';
+import { serializePlaylist, serializePlaylistItem } from '../utils/serialize.js';
 import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
@@ -288,7 +288,7 @@ async function addPlaylistItems(req) {
     playlistSize,
   } = await playlists.addPlaylistItems(playlist, items, { after: afterID });
 
-  return toListResponse(added, {
+  return toListResponse(added.map(serializePlaylistItem), {
     included: {
       media: ['media'],
     },

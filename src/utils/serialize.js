@@ -13,6 +13,31 @@ export function serializePlaylist(model) {
 }
 
 /**
+ * @param {{
+ *   id: import('../schema.js').PlaylistItemID,
+ *   media: import('../schema.js').Media,
+ *   artist: string,
+ *   title: string,
+ *   start: number,
+ *   end: number,
+ *   createdAt?: Date,
+ *   updatedAt?: Date,
+ * }} model
+ */
+export function serializePlaylistItem(model) {
+  return {
+    _id: model.id,
+    media: model.media,
+    artist: model.artist,
+    title: model.title,
+    start: model.start,
+    end: model.end,
+    createdAt: model.createdAt?.toISOString(),
+    updatedAt: model.updatedAt?.toISOString(),
+  };
+}
+
+/**
  * @param {import('../schema.js').User} model
  */
 export function serializeUser(model) {
