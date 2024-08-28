@@ -647,7 +647,7 @@ describe('Playlists', () => {
       const res2 = await supertest(uw.server)
         .post(`/api/playlists/${playlist.id}/media`)
         .set('Cookie', `uwsession=${token}`)
-        .send({ items: insertItems, after: middleItem._id })
+        .send({ items: insertItems, after: middleItem.id })
         .expect(200);
 
       sinon.assert.match(res2.body.meta, {

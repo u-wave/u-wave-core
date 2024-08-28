@@ -272,21 +272,22 @@ async function addPlaylistItems(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  /** @type {PlaylistItemID|null} */
-  let afterID = null;
-  if (at === 'start') {
-    afterID = null;
-  } else if (at === 'end' || after === -1) {
-    afterID = playlist.media[playlist.size - 1];
-  } else if (after !== null) {
-    afterID = after;
+  let options;
+  if (at === 'start' || at === 'end') {
+    options = { at };
+  } else if (after === -1) {
+    options = { at: /** @type {const} */ ('end') };
+  } else if (after == null) {
+    options = { at: /** @type {const} */ ('start') };
+  } else {
+    options = { after };
   }
 
   const {
     added,
     afterID: actualAfterID,
     playlistSize,
-  } = await playlists.addPlaylistItems(playlist, items, { after: afterID });
+  } = await playlists.addPlaylistItems(playlist, items, options);
 
   return toListResponse(added.map(serializePlaylistItem), {
     included: {
@@ -353,18 +354,18 @@ async function movePlaylistItems(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  /** @type {PlaylistItemID|null} */
-  let afterID = null;
-  if (at === 'start') {
-    afterID = null;
-  } else if (at === 'end' || after === -1) {
-    afterID = playlist.media[playlist.size - 1];
-  } else if (after != null) {
-    afterID = after;
+  let options;
+  if (at === 'start' || at === 'end') {
+    options = { at };
+  } else if (after === -1) {
+    options = { at: /** @type {const} */ ('end') };
+  } else if (after == null) {
+    options = { at: /** @type {const} */ ('start') };
+  } else {
+    options = { after };
   }
 
-  const itemIDs = items.map((item) => item);
-  const result = await playlists.movePlaylistItems(playlist, itemIDs, { afterID });
+  const result = await playlists.movePlaylistItems(playlist, items, options);
 
   return toItemResponse(result, { url: req.fullUrl });
 }

@@ -576,9 +576,9 @@ class PlaylistsRepository {
    *
    * @param {Playlist} playlist
    * @param {PlaylistItemDesc[]} items
-   * @param {{ after?: PlaylistItemID|null }} options
+   * @param {{ after: PlaylistItemID } | { at: 'start' | 'end' }} [options]
    */
-  async addPlaylistItems(playlist, items, { after = null } = {}) {
+  async addPlaylistItems(playlist, items, options = { at: 'end' }) {
     const { users } = this.#uw;
     const user = await users.getUser(playlist.userID);
     if (!user) {
@@ -620,13 +620,27 @@ class PlaylistsRepository {
         .where('id', '=', playlist.id)
         .executeTakeFirstOrThrow();
 
+      /** @type {PlaylistItemID[]} */
       const oldItems = result?.items ? JSON.parse(/** @type {string} */ (result.items)) : [];
-      const insertIndex = after === null ? -1 : oldItems.indexOf(after);
-      const newItems = [
-        ...oldItems.slice(0, insertIndex + 1),
-        ...playlistItems.map((item) => item.id),
-        ...oldItems.slice(insertIndex + 1),
-      ];
+
+      /** @type {PlaylistItemID | null} */
+      let after;
+      let newItems;
+      if ('after' in options) {
+        after = options.after;
+        const insertIndex = oldItems.indexOf(options.after);
+        newItems = [
+          ...oldItems.slice(0, insertIndex + 1),
+          ...playlistItems.map((item) => item.id),
+          ...oldItems.slice(insertIndex + 1),
+        ];
+      } else if (options.at === 'start') {
+        after = null;
+        newItems = playlistItems.map((item) => item.id).concat(oldItems);
+      } else {
+        newItems = oldItems.concat(playlistItems.map((item) => item.id));
+        after = oldItems.at(-1) ?? null;
+      }
 
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)
@@ -648,7 +662,6 @@ class PlaylistsRepository {
    * @param {object} patch
    * @returns {Promise<PlaylistItem>}
    */
-  // eslint-disable-next-line class-methods-use-this
   async updatePlaylistItem(item, patch = {}) {
     Object.assign(item, patch);
     await item.save();
@@ -658,10 +671,9 @@ class PlaylistsRepository {
   /**
    * @param {Playlist} playlist
    * @param {PlaylistItemID[]} itemIDs
-   * @param {{ afterID: PlaylistItemID | null }} options
+   * @param {{ after: PlaylistItemID } | { at: 'start' | 'end' }} options
    */
-  // eslint-disable-next-line class-methods-use-this
-  async movePlaylistItems(playlist, itemIDs, { afterID }) {
+  async movePlaylistItems(playlist, itemIDs, options) {
     const { db } = this.#uw;
 
     await db.transaction().execute(async (tx) => {
@@ -676,23 +688,34 @@ class PlaylistsRepository {
 
       /** @type {PlaylistItemID[]} */
       let newItemIDs = [];
+      /** Index in the new item array to move the item IDs to. */
       let insertIndex = 0;
       let index = 0;
       for (const itemID of itemIDsInPlaylist) {
-        index += 1;
         if (!itemIDsToMove.has(itemID)) {
+          index += 1;
           newItemIDs.push(itemID);
         }
-        if (itemID === afterID) {
+        if ('after' in options && itemID === options.after) {
           insertIndex = index;
         }
       }
 
-      newItemIDs = [
-        ...newItemIDs.slice(0, insertIndex),
-        ...itemIDsToMove,
-        ...newItemIDs.slice(insertIndex),
-      ];
+      let after;
+      if ('after' in options) {
+        after = options.after;
+        newItemIDs = [
+          ...newItemIDs.slice(0, insertIndex + 1),
+          ...itemIDsToMove,
+          ...newItemIDs.slice(insertIndex + 1),
+        ];
+      } else if (options.at === 'start') {
+        after = null;
+        newItemIDs = [...itemIDsToMove, ...newItemIDs];
+      } else {
+        newItemIDs = [...newItemIDs, ...itemIDsToMove];
+        after = newItemIDs.at(-1) ?? null;
+      }
 
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)
