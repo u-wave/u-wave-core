@@ -1,13 +1,13 @@
 import assert from 'node:assert';
 import RedLock from 'redlock';
-import lodash from 'lodash';
 import { EmptyPlaylistError, PlaylistItemNotFoundError } from '../errors/index.js';
 import routes from '../routes/booth.js';
-
-const { omit } = lodash;
+import { randomUUID } from 'node:crypto';
+import { jsonb } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
  * @typedef {import('type-fest').JsonObject} JsonObject
  * @typedef {import('../schema.js').User} User
  * @typedef {import('../schema.js').Playlist} Playlist
@@ -15,18 +15,6 @@ const { omit } = lodash;
  * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
  * @typedef {import('../schema.js').Media} Media
  */
-
-/**
- * @param {Playlist} playlist
- * @returns {Promise<void>}
- */
-async function cyclePlaylist(playlist) {
-  const item = playlist.media.shift();
-  if (item !== undefined) {
-    playlist.media.push(item);
-  }
-  await playlist.save();
-}
 
 class Booth {
   #uw;
@@ -56,8 +44,8 @@ class Booth {
     if (current && this.#timeout === null) {
       // Restart the advance timer after a server restart, if a track was
       // playing before the server restarted.
-      const duration = (current.end - current.start) * 1000;
-      const endTime = Number(current.createdAt) + duration;
+      const duration = (current.historyEntry.end - current.historyEntry.start) * 1000;
+      const endTime = current.historyEntry.createdAt.getTime() + duration;
       if (endTime > Date.now()) {
         this.#timeout = setTimeout(
           () => this.#advanceAutomatically(),
@@ -89,7 +77,7 @@ class Booth {
   async getCurrentEntry() {
     const { db } = this.#uw;
 
-    const historyID = /** @type {import('../schema').HistoryEntryID} */ (await this.#uw.redis.get('booth:historyID'));
+    const historyID = /** @type {HistoryEntryID} */ (await this.#uw.redis.get('booth:historyID'));
     if (!historyID) {
       return null;
     }
@@ -112,22 +100,13 @@ class Booth {
         'historyEntries.start',
         'historyEntries.end',
         'historyEntries.createdAt',
-        'historyEntries.updatedAt',
       ])
       .where('id', '=', historyID)
       .executeTakeFirst();
 
     return entry ? {
-      _id: entry.id,
-      userID: entry.userID,
-      artist: entry.artist,
-      title: entry.title,
-      start: entry.start,
-      end: entry.end,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
       media: {
-        _id: entry['media.id'],
+        id: entry['media.id'],
         artist: entry['media.artist'],
         title: entry['media.title'],
         duration: entry['media.duration'],
@@ -136,6 +115,20 @@ class Booth {
         sourceType: entry['media.sourceType'],
         sourceData: entry['media.sourceData'] ?? {},
       },
+      historyEntry: {
+        id: entry.id,
+        userID: entry.userID,
+        mediaID: entry['media.id'],
+        artist: entry.artist,
+        title: entry.title,
+        start: entry.start,
+        end: entry.end,
+        createdAt: entry.createdAt,
+      },
+      // TODO
+      upvotes: [],
+      downvotes: [],
+      favorites: [],
     } : null;
   }
 
@@ -161,16 +154,6 @@ class Booth {
     };
 
     return voteStats;
-  }
-
-  /**
-   * @param {HistoryEntry} entry
-   */
-  async #saveStats(entry) {
-    const stats = await this.getCurrentVoteStats();
-
-    Object.assign(entry, stats);
-    return entry.save();
   }
 
   /** @param {{ remove?: boolean }} options */
@@ -209,13 +192,34 @@ class Booth {
 
     return {
       user,
-      media: playlistItem,
-      sourceData: null,
+      playlist,
+      playlistItem,
+      media: {
+        id: playlistItem.media._id,
+        sourceType: playlistItem.media.sourceType,
+        sourceID: playlistItem.media.sourceID,
+        sourceData: playlistItem.media.sourceData,
+        artist: playlistItem.media.artist,
+        title: playlistItem.media.title,
+        duration: playlistItem.media.duration,
+        thumbnail: playlistItem.media.thumbnail,
+      },
+      historyEntry: {
+        id: /** @type {HistoryEntryID} */ (randomUUID()),
+        userID: user.id,
+        mediaID: playlistItem.media._id,
+        artist: playlistItem.artist,
+        title: playlistItem.title,
+        start: playlistItem.start,
+        end: playlistItem.end,
+        /** @type {null | JsonObject} */
+        sourceData: null,
+      },
     };
   }
 
   /**
-   * @param {{ userID: UserID }|null} previous
+   * @param {UserID|null} previous
    * @param {{ remove?: boolean }} options
    */
   async #cycleWaitlist(previous, options) {
@@ -225,7 +229,7 @@ class Booth {
       if (previous && !options.remove) {
         // The previous DJ should only be added to the waitlist again if it was
         // not empty. If it was empty, the previous DJ is already in the booth.
-        await this.#uw.redis.rpush('waitlist', previous.userID);
+        await this.#uw.redis.rpush('waitlist', previous);
       }
     }
   }
@@ -241,12 +245,12 @@ class Booth {
   }
 
   /**
-   * @param {PopulatedHistoryEntry} next
+   * @param {{ historyEntry: { id: HistoryEntryID }, user: { id: UserID } }} next
    */
   #update(next) {
     return this.#uw.redis.multi()
       .del('booth:upvotes', 'booth:downvotes', 'booth:favorites')
-      .set('booth:historyID', next.id)
+      .set('booth:historyID', next.historyEntry.id)
       .set('booth:currentDJ', next.user.id)
       .exec();
   }
@@ -259,13 +263,13 @@ class Booth {
   }
 
   /**
-   * @param {PopulatedHistoryEntry} entry
+   * @param {Pick<HistoryEntry, 'start' | 'end'>} entry
    */
   #play(entry) {
     this.#maybeStop();
     this.#timeout = setTimeout(
       () => this.#advanceAutomatically(),
-      (entry.media.end - entry.media.start) * 1000,
+      (entry.end - entry.start) * 1000,
     );
   }
 
@@ -277,34 +281,42 @@ class Booth {
    * a property of the media model for backwards compatibility.
    * Old clients don't expect `sourceData` directly on a history entry object.
    *
-   * @param {PopulateMedia} historyEntry
+   * @param {{ user: User, media: Media, historyEntry: HistoryEntry }} next
    */
-  // eslint-disable-next-line class-methods-use-this
-  getMediaForPlayback(historyEntry) {
-    return Object.assign(omit(historyEntry.media, 'sourceData'), {
+  getMediaForPlayback(next) {
+    return {
+      artist: next.historyEntry.artist,
+      title: next.historyEntry.title,
+      start: next.historyEntry.start,
+      end: next.historyEntry.end,
       media: {
-        ...historyEntry.media.media,
+        sourceType: next.media.sourceType,
+        sourceID: next.media.sourceID,
+        artist: next.media.artist,
+        title: next.media.title,
+        duration: next.media.duration,
         sourceData: {
-          ...historyEntry.media.media.sourceData,
-          ...historyEntry.media.sourceData,
+          ...next.media.sourceData,
+          ...next.historyEntry.sourceData,
         },
       },
-    });
+    };
   }
 
   /**
-   * @param {PopulatedHistoryEntry|null} next
+   * @param {{ user: User, playlist: Playlist, media: Media, historyEntry: HistoryEntry }} next
    */
   async #publishAdvanceComplete(next) {
     const { waitlist } = this.#uw;
 
     if (next) {
       this.#uw.publish('advance:complete', {
-        historyID: next.id,
+        historyID: next.historyEntry.id,
         userID: next.user.id,
         playlistID: next.playlist.id,
         media: this.getMediaForPlayback(next),
-        playedAt: next.createdAt.getTime(),
+        // TODO
+        // playedAt: next.historyEntry.createdAt.getTime(),
       });
       this.#uw.publish('playlist:cycle', {
         userID: next.user.id,
@@ -317,17 +329,17 @@ class Booth {
   }
 
   /**
-   * @param {{ user: User, media: { media: { sourceID: string, sourceType: string } } }} entry
+   * @param {{ user: User, media: { sourceID: string, sourceType: string } }} entry
    */
   async #getSourceDataForPlayback(entry) {
-    const { sourceID, sourceType } = entry.media.media;
+    const { sourceID, sourceType } = entry.media;
     const source = this.#uw.source(sourceType);
     if (source) {
       this.#logger.trace({ sourceType: source.type, sourceID }, 'running pre-play hook');
       /** @type {JsonObject | undefined} */
       let sourceData;
       try {
-        sourceData = await source.play(entry.user, entry.media.media);
+        sourceData = await source.play(entry.user, entry.media);
         this.#logger.trace({ sourceType: source.type, sourceID, sourceData }, 'pre-play hook result');
       } catch (error) {
         this.#logger.error({ sourceType: source.type, sourceID, err: error }, 'pre-play hook failed');
@@ -345,9 +357,13 @@ class Booth {
    * @prop {import('redlock').RedlockAbortSignal} [signal]
    *
    * @param {AdvanceOptions} [opts]
-   * @returns {Promise<PopulatedHistoryEntry|null>}
+   * @returns {Promise<{
+   *   user: User,
+   *   historyEntry: HistoryEntry,
+   *   media: Media,
+   * }|null>}
    */
-  async #advanceLocked(opts = {}) {
+  async #advanceLocked(opts = {}, tx = this.#uw.db) {
     const { playlists } = this.#uw
 
     const publish = opts.publish ?? true;
@@ -364,8 +380,8 @@ class Booth {
       // and try advancing again.
       if (err instanceof EmptyPlaylistError) {
         this.#logger.info('user has empty playlist, skipping on to the next');
-        await this.#cycleWaitlist(previous, { remove });
-        return this.#advanceLocked({ publish, remove: true });
+        await this.#cycleWaitlist(previous != null ? previous.historyEntry.userID : null, { remove });
+        return this.#advanceLocked({ publish, remove: true }, tx);
       }
       throw err;
     }
@@ -375,10 +391,8 @@ class Booth {
     }
 
     if (previous) {
-      await this.#saveStats(previous);
-
       this.#logger.info({
-        id: previous._id,
+        id: previous.historyEntry.id,
         artist: previous.media.artist,
         title: previous.media.title,
         upvotes: previous.upvotes.length,
@@ -389,25 +403,36 @@ class Booth {
 
     if (next) {
       this.#logger.info({
-        id: next.media._id,
-        artist: next.media.artist,
-        title: next.media.title,
+        id: next.playlistItem._id,
+        artist: next.playlistItem.artist,
+        title: next.playlistItem.title,
       }, 'next track');
       const sourceData = await this.#getSourceDataForPlayback(next);
       if (sourceData) {
-        next.media.sourceData = sourceData;
+        next.historyEntry.sourceData = sourceData;
       }
-      await next.save();
+      await tx.insertInto('historyEntries')
+        .values({
+          id: next.historyEntry.id,
+          userID: next.user.id,
+          mediaID: next.media.id,
+          artist: next.historyEntry.artist,
+          title: next.historyEntry.title,
+          start: next.historyEntry.start,
+          end: next.historyEntry.end,
+          sourceData: next.historyEntry.sourceData != null ? jsonb(next.historyEntry.sourceData) : null,
+        })
+        .execute();
     } else {
       this.#maybeStop();
     }
 
-    await this.#cycleWaitlist(previous, { remove });
+    await this.#cycleWaitlist(previous != null ? previous.historyEntry.userID : null, { remove });
 
     if (next) {
       await this.#update(next);
-      await playlists.cyclePlaylist(next.playlist);
-      this.#play(next);
+      await playlists.cyclePlaylist(next.playlist, tx);
+      this.#play(next.historyEntry);
     } else {
       await this.clear();
     }
@@ -421,7 +446,6 @@ class Booth {
 
   /**
    * @param {AdvanceOptions} [opts]
-   * @returns {Promise<PopulatedHistoryEntry|null>}
    */
   advance(opts = {}) {
     const result = this.#locker.using(

@@ -116,7 +116,7 @@ describe('Waitlist', () => {
         .expect(403);
       sinon.assert.match(noPlaylistRes.body.errors[0], { code: 'empty-playlist' });
 
-      const playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      const { playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
 
       const emptyPlaylistRes = await supertest(uw.server)
         .post('/api/waitlist')
@@ -182,7 +182,8 @@ describe('Waitlist', () => {
         .send({ userID: testSubject.id })
         .expect(403);
 
-      await uw.acl.allow(user, ['waitlist.add']);
+      await uw.acl.createRole('adder', ['waitlist.add']);
+      await uw.acl.allow(user, ['adder']);
 
       await supertest(uw.server)
         .post('/api/waitlist')

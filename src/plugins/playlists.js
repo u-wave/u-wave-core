@@ -265,10 +265,8 @@ class PlaylistsRepository {
    *
    * @param {Playlist} playlist
    */
-  async cyclePlaylist(playlist) {
-    const { db } = this.#uw;
-
-    await db.updateTable('playlists')
+  async cyclePlaylist(playlist, tx = this.#uw.db) {
+    await tx.updateTable('playlists')
       .where('id', '=', playlist.id)
       .set('items', (eb) => arrayCycle(eb.ref('items')))
       .execute();
@@ -329,7 +327,8 @@ class PlaylistsRepository {
       .where('playlistItems.playlistID', '=', playlist.id)
       .where('playlistItems.id', '=', (eb) => {
         /** @type {import('kysely').RawBuilder<PlaylistItemID>} */
-        const item =  sql`items->>${order}`
+        // items->>order doesn't work for some reason, not sure why
+        const item =  sql`json_extract(items, ${`$[${order}]`})`
         return eb.selectFrom('playlists')
           .select(item.as('playlistItemID'))
           .where('id', '=', playlist.id)

@@ -60,10 +60,14 @@ export function arrayShuffle(expr) {
  */
 export function arrayCycle(expr) {
   return sql`
-    CASE ${jsonLength(expr)}
+    (CASE ${jsonLength(expr)}
       WHEN 0 THEN (${expr})
-      ELSE jsonb_insert(jsonb_remove((${expr}), '$[0]'), '$[#]', (${expr})->>0))
-    END
+      ELSE jsonb_insert(
+        jsonb_remove((${expr}), '$[0]'),
+        '$[#]',
+        (${expr})->>0
+      )
+    END)
   `
 }
 

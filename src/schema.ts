@@ -110,7 +110,6 @@ export interface HistoryEntryTable {
   /** Arbitrary source-specific data required for media playback. */
   sourceData: JsonObject | null,
   createdAt: Generated<Date>,
-  updatedAt: Generated<Date>,
 }
 
 export interface ConfigurationTable {
