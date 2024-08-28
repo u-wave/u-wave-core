@@ -156,12 +156,11 @@ class UsersRepository {
   async localLogin({ email, password }) {
     const user = await this.#uw.db.selectFrom('users')
       .where('email', '=', email)
-      .select(userSelection)
+      .select([...userSelection, 'password'])
       .executeTakeFirst();
     if (!user) {
       throw new UserNotFoundError({ email });
     }
-    return omit(user, 'password');
 
     if (!user.password) {
       throw new IncorrectPasswordError();
