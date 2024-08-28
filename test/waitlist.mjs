@@ -38,7 +38,7 @@ describe('Waitlist', () => {
   }
 
   async function createTestPlaylistItem(testUser) {
-    const playlist = await uw.playlists.createPlaylist(testUser, { name: 'Test Playlist' });
+    const { playlist } = await uw.playlists.createPlaylist(testUser, { name: 'Test Playlist' });
     await uw.playlists.addPlaylistItems(playlist, [{
       sourceType: 'test-source',
       sourceID: randomString({ length: 10 }),

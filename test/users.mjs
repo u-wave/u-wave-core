@@ -27,7 +27,8 @@ describe('Users', () => {
         .set('Cookie', `uwsession=${token}`)
         .expect(403);
 
-      await uw.acl.allow(user, ['users.list']);
+      await uw.acl.createRole('lister', ['users.list']);
+      await uw.acl.allow(user, ['lister']);
 
       await supertest(uw.server)
         .get('/api/users')
