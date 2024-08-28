@@ -269,7 +269,6 @@ class UwaveServer extends EventEmitter {
         new UwCamelCasePlugin(),
         new SqliteDateColumnsPlugin(['createdAt', 'updatedAt', 'expiresAt', 'playedAt', 'lastSeenAt']),
       ],
-      log: ['query', 'error'],
     });
     this.mongo = mongoose.createConnection(this.options.mongo);
     // mongoose.set('debug', true);
