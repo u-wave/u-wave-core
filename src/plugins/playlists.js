@@ -388,8 +388,8 @@ class PlaylistsRepository {
       .select(playlistItemSelection);
     if (filter != null) {
       query = query.where((eb) => eb.or([
-        eb('playlistItems.artist', 'like', filter),
-        eb('playlistItems.title', 'like', filter),
+        eb('playlistItems.artist', 'like', `%${filter}%`),
+        eb('playlistItems.title', 'like', `%${filter}%`),
       ]));
     }
 
@@ -406,8 +406,8 @@ class PlaylistsRepository {
       .select((eb) => eb.fn.countAll().as('count'))
       .where('playlistID', '=', playlist.id)
       .where((eb) => eb.or([
-        eb('playlistItems.artist', 'like', filter),
-        eb('playlistItems.title', 'like', filter),
+        eb('playlistItems.artist', 'like', `%${filter}%`),
+        eb('playlistItems.title', 'like', `%${filter}%`),
       ]))
       .executeTakeFirstOrThrow();
 
