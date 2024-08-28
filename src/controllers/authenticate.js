@@ -5,13 +5,13 @@ import nodeFetch from 'node-fetch';
 import ms from 'ms';
 import htmlescape from 'htmlescape';
 import httpErrors from 'http-errors';
+import nodemailer from 'nodemailer';
 import {
   BannedError,
   ReCaptchaError,
   InvalidResetTokenError,
   UserNotFoundError,
 } from '../errors/index.js';
-import sendEmail from '../email.js';
 import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
@@ -388,15 +388,21 @@ async function reset(req) {
   await redis.set(`reset:${token}`, user.id);
   await redis.expire(`reset:${token}`, 24 * 60 * 60);
 
-  const message = await createPasswordResetEmail({
+  const message = createPasswordResetEmail({
     token,
     requestUrl: req.fullUrl,
   });
 
-  await sendEmail(email, {
-    mailTransport,
-    email: message,
+  const transporter = nodemailer.createTransport(mailTransport ?? {
+    host: 'localhost',
+    port: 25,
+    debug: true,
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
+
+  await transporter.sendMail({ to: email, ...message });
 
   return toItemResponse({});
 }
