@@ -67,5 +67,14 @@ export function arrayCycle(expr) {
   `
 }
 
+/**
+ * @template {unknown} T
+ * @param {import('kysely').Expression<T>} expr
+ * @returns {import('kysely').RawBuilder<T[]>}
+ */
+export function jsonGroupArray(expr) {
+  return sql`json_group_array(${expr})`;
+}
+
 /** @type {import('kysely').RawBuilder<Date>} */
 export const now = sql`(strftime('%FT%T', 'now'))`;

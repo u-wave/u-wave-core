@@ -356,7 +356,7 @@ async function register(req) {
       password,
     });
 
-    return toItemResponse(user);
+    return toItemResponse(serializeUser(user));
   } catch (error) {
     throw beautifyDuplicateKeyError(error);
   }

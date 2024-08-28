@@ -3,6 +3,9 @@ import bcrypt from 'bcryptjs';
 import Page from '../Page.js';
 import { IncorrectPasswordError, UserNotFoundError } from '../errors/index.js';
 import { slugify } from 'transliteration';
+import { jsonGroupArray } from '../utils/sqlite.js';
+import { sql } from 'kysely';
+import { randomUUID } from 'crypto';
 
 const { pick, omit } = lodash;
 
@@ -17,6 +20,29 @@ const { pick, omit } = lodash;
 function encryptPassword(password) {
   return bcrypt.hash(password, 10);
 }
+
+/** @param {import('kysely').ExpressionBuilder<import('../schema.js').Database, 'users'>} eb */
+const userRolesColumn = (eb) => eb.selectFrom('userRoles')
+  .where('userRoles.userID', '=', eb.ref('users.id'))
+  .select((sb) => jsonGroupArray(sb.ref('userRoles.role')).as('roles'));
+/** @param {import('kysely').ExpressionBuilder<import('../schema.js').Database, 'users'>} eb */
+const avatarColumn = (eb) => eb.fn.coalesce(
+  'users.avatar',
+  /** @type {import('kysely').RawBuilder<string>} */ (sql`concat('https://sigil.u-wave.net/', ${eb.ref('users.id')})`),
+);
+
+/** @type {import('kysely').SelectExpression<import('../schema.js').Database, 'users'>[]} */
+const userSelection = [
+  'users.id',
+  'users.username',
+  'users.slug',
+  'users.activePlaylistID',
+  'users.pendingActivation',
+  'users.createdAt',
+  'users.updatedAt',
+  (eb) => avatarColumn(eb).as('avatar'),
+  (eb) => userRolesColumn(eb).as('roles'),
+]
 
 class UsersRepository {
   #uw;
@@ -56,7 +82,7 @@ class UsersRepository {
     const query = baseQuery
       .offset(offset)
       .limit(limit)
-      .select(['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt']);
+      .select(userSelection);
 
     const [
       users,
@@ -90,10 +116,15 @@ class UsersRepository {
 
     const user = await db.selectFrom('users')
       .where('id', '=', id)
-      .select(['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt'])
+      .select(userSelection)
       .executeTakeFirst();
 
-    return user ? { ...user, roles: [] } : null;
+    if (user == null) {
+      return null;
+    }
+
+    const roles = /** @type {string[]} */ (JSON.parse(/** @type {string} */ (/** @type {unknown} */ (user.roles))));
+    return Object.assign(user, { roles });
   }
 
   /**
@@ -125,15 +156,7 @@ class UsersRepository {
   async localLogin({ email, password }) {
     const user = await this.#uw.db.selectFrom('users')
       .where('email', '=', email)
-      .select([
-        'id',
-        'username',
-        'password',
-        'slug',
-        'pendingActivation',
-        'createdAt',
-        'updatedAt',
-      ])
+      .select(userSelection)
       .executeTakeFirst();
     if (!user) {
       throw new UserNotFoundError({ email });
@@ -196,13 +219,7 @@ class UsersRepository {
           'authServices.service',
           'authServices.serviceID',
           'authServices.serviceAvatar',
-          'users.id',
-          'users.username',
-          'users.slug',
-          'users.activePlaylistID',
-          'users.pendingActivation',
-          'users.createdAt',
-          'users.updatedAt',
+          ...userSelection,
         ])
         .executeTakeFirst();
 
@@ -215,10 +232,11 @@ class UsersRepository {
       } else {
         const user = await tx.insertInto('users')
           .values({
+            id: /** @type {UserID} */ (randomUUID()),
             username: username ? username.replace(/\s/g, '') : `${type}.${id}`,
             slug: slugify(username),
             pendingActivation: true, // type,
-            // avatar,
+            avatar,
           })
           .returningAll()
           .executeTakeFirstOrThrow();
@@ -251,7 +269,7 @@ class UsersRepository {
   async createUser({
     username, email, password,
   }) {
-    const { db } = this.#uw;
+    const { acl, db } = this.#uw;
 
     this.#logger.info({ username, email: email.toLowerCase() }, 'create user');
 
@@ -259,29 +277,34 @@ class UsersRepository {
 
     const user = await db.insertInto('users')
       .values({
+        id: /** @type {UserID} */ (randomUUID()),
         username,
         email,
         password: hash,
         slug: slugify(username),
-        pendingActivation: false,
+        pendingActivation: /** @type {boolean} */ (/** @type {unknown} */ (0)),
       })
       .returning([
-        'id',
-        'username',
-        'slug',
-        'activePlaylistID',
-        'pendingActivation',
-        'createdAt',
-        'updatedAt',
+        'users.id',
+        'users.username',
+        'users.slug',
+        (eb) => avatarColumn(eb).as('avatar'),
+        'users.activePlaylistID',
+        'users.pendingActivation',
+        'users.createdAt',
+        'users.updatedAt',
       ])
       .executeTakeFirstOrThrow();
+
+    const roles = ['user'];
+    await acl.allow(user, roles);
 
     this.#uw.publish('user:create', {
       user: user.id,
       auth: { type: 'local', email: email.toLowerCase() },
     });
 
-    return user;
+    return Object.assign(user, { roles });
   }
 
   /**

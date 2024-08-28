@@ -36,6 +36,7 @@ async function up({ context: uw }) {
     .addColumn('email', 'text')
     .addColumn('password', 'text')
     .addColumn('slug', 'text', (col) => col.notNull().unique())
+    .addColumn('avatar', 'text')
     .addColumn('pending_activation', 'boolean', (col) => col.defaultTo(null))
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
