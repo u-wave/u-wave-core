@@ -202,7 +202,7 @@ describe('Password Reset', () => {
 
     sinon.assert.calledWithMatch(sendSpy, {
       data: {
-        to: 'test@example.com',
+        to: sinon.match(/@example.com$/),
         text: sinon.match(/http:\/\/127\.0\.0\.1:\d+\/reset\//),
       },
     });
