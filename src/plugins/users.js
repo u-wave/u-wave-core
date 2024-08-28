@@ -228,7 +228,10 @@ class UsersRepository {
           auth.serviceAvatar = avatar;
         }
 
-        return pick(auth, ['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt']);
+        return Object.assign(
+          pick(auth, ['id', 'username', 'slug', 'activePlaylistID', 'pendingActivation', 'createdAt', 'updatedAt']),
+          { avatar: null },
+        );
       } else {
         const user = await tx.insertInto('users')
           .values({

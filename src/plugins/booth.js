@@ -84,9 +84,9 @@ class Booth {
 
     const entry = await db.selectFrom('historyEntries')
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .innerJoin('users', 'historyEntries.userID', 'users.id')
       .select([
         'historyEntries.id as id',
-        'historyEntries.userID as userID',
         'media.id as media.id',
         'media.sourceID as media.sourceID',
         'media.sourceType as media.sourceType',
@@ -95,13 +95,17 @@ class Booth {
         'media.title as media.title',
         'media.duration as media.duration',
         'media.thumbnail as media.thumbnail',
+        'users.id as users.id',
+        'users.username as users.username',
+        'users.avatar as users.avatar',
+        'users.createdAt as users.createdAt',
         'historyEntries.artist',
         'historyEntries.title',
         'historyEntries.start',
         'historyEntries.end',
         'historyEntries.createdAt',
       ])
-      .where('id', '=', historyID)
+      .where('historyEntries.id', '=', historyID)
       .executeTakeFirst();
 
     return entry ? {
@@ -115,9 +119,15 @@ class Booth {
         sourceType: entry['media.sourceType'],
         sourceData: entry['media.sourceData'] ?? {},
       },
+      user: {
+        id: entry['users.id'],
+        username: entry['users.username'],
+        avatar: entry['users.avatar'],
+        createdAt: entry['users.createdAt'],
+      },
       historyEntry: {
         id: entry.id,
-        userID: entry.userID,
+        userID: entry['users.id'],
         mediaID: entry['media.id'],
         artist: entry.artist,
         title: entry.title,
@@ -185,7 +195,7 @@ class Booth {
       throw new EmptyPlaylistError();
     }
 
-    const playlistItem = await playlists.getPlaylistItemAt(playlist, 0);
+    const { playlistItem, media } = await playlists.getPlaylistItemAt(playlist, 0);
     if (!playlistItem) {
       throw new PlaylistItemNotFoundError();
     }
@@ -194,20 +204,11 @@ class Booth {
       user,
       playlist,
       playlistItem,
-      media: {
-        id: playlistItem.media._id,
-        sourceType: playlistItem.media.sourceType,
-        sourceID: playlistItem.media.sourceID,
-        sourceData: playlistItem.media.sourceData,
-        artist: playlistItem.media.artist,
-        title: playlistItem.media.title,
-        duration: playlistItem.media.duration,
-        thumbnail: playlistItem.media.thumbnail,
-      },
+      media,
       historyEntry: {
         id: /** @type {HistoryEntryID} */ (randomUUID()),
         userID: user.id,
-        mediaID: playlistItem.media._id,
+        mediaID: media.id,
         artist: playlistItem.artist,
         title: playlistItem.title,
         start: playlistItem.start,
@@ -403,7 +404,7 @@ class Booth {
 
     if (next) {
       this.#logger.info({
-        id: next.playlistItem._id,
+        id: next.playlistItem.id,
         artist: next.playlistItem.artist,
         title: next.playlistItem.title,
       }, 'next track');

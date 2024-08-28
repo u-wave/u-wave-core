@@ -1,5 +1,6 @@
 import { getBoothData } from './booth.js';
 import { serializePlaylist, serializeUser } from '../utils/serialize.js';
+import { legacyPlaylistItem } from './playlists.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -12,8 +13,8 @@ import { serializePlaylist, serializeUser } from '../utils/serialize.js';
 async function getFirstItem(uw, playlist) {
   try {
     if (playlist && playlist.size > 0) {
-      const item = await uw.playlists.getPlaylistItemAt(playlist, 0);
-      return item;
+      const { playlistItem, media } = await uw.playlists.getPlaylistItemAt(playlist, 0);
+      return legacyPlaylistItem(playlistItem, media);
     }
   } catch (e) {
     // Nothing

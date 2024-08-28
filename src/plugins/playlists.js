@@ -94,6 +94,8 @@ const playlistItemSelection = /** @type {const} */ ([
   'playlistItems.title',
   'playlistItems.start',
   'playlistItems.end',
+  'playlistItems.createdAt',
+  'playlistItems.updatedAt',
 ])
 
 /**
@@ -132,6 +134,51 @@ function playlistItemFromSelection (raw) {
     },
   }
 }
+
+/**
+ * @param {{
+ *   id: PlaylistItemID,
+ *   'media.id': MediaID,
+ *   'media.sourceID': string,
+ *   'media.sourceType': string,
+ *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.artist': string,
+ *   'media.title': string,
+ *   'media.duration': number,
+ *   'media.thumbnail': string,
+ *   artist: string,
+ *   title: string,
+ *   start: number,
+ *   end: number,
+ *   createdAt: Date,
+ *   updatedAt: Date,
+ * }} raw
+ */
+function playlistItemFromSelectionNew (raw) {
+  return {
+    playlistItem: {
+      id: raw.id,
+      mediaID: raw['media.id'],
+      artist: raw.artist,
+      title: raw.title,
+      start: raw.start,
+      end: raw.end,
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+    },
+    media: {
+      id: raw['media.id'],
+      artist: raw['media.artist'],
+      title: raw['media.title'],
+      duration: raw['media.duration'],
+      thumbnail: raw['media.thumbnail'],
+      sourceID: raw['media.sourceID'],
+      sourceType: raw['media.sourceType'],
+      sourceData: raw['media.sourceData'],
+    },
+  }
+}
+
 
 class PlaylistsRepository {
   #uw;
@@ -313,7 +360,7 @@ class PlaylistsRepository {
       throw new ItemNotInPlaylistError({ playlistID: playlist.id, itemID });
     }
 
-    return playlistItemFromSelection(raw)
+    return playlistItemFromSelectionNew(raw)
   }
 
   /**
@@ -341,7 +388,7 @@ class PlaylistsRepository {
       throw new ItemNotInPlaylistError({ playlistID: playlist.id });
     }
 
-    return playlistItemFromSelection(raw)
+    return playlistItemFromSelectionNew(raw)
   }
 
   /**
@@ -658,13 +705,19 @@ class PlaylistsRepository {
 
   /**
    * @param {PlaylistItem} item
-   * @param {object} patch
+   * @param {Partial<Pick<PlaylistItem, 'artist' | 'title' | 'start' | 'end'>>} patch
    * @returns {Promise<PlaylistItem>}
    */
   async updatePlaylistItem(item, patch = {}) {
-    Object.assign(item, patch);
-    await item.save();
-    return item;
+    const { db } = this.#uw;
+
+    const updatedItem = await db.updateTable('playlistItems')
+      .where('id', '=', item.id)
+      .set(patch)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    return updatedItem;
   }
 
   /**

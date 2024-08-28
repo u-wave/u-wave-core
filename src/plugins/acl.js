@@ -14,6 +14,7 @@ function p(input) {
 }
 export const Permissions = {
   Super: p('*'),
+  MotdSet: p('motd.set'),
   WaitlistJoin: p('waitlist.join'),
   WaitlistJoinLocked: p('waitlist.join.locked'),
   WaitlistLeave: p('waitlist.leave'),

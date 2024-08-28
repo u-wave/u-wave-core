@@ -12,6 +12,32 @@ import toPaginatedResponse from '../utils/toPaginatedResponse.js';
  */
 
 /**
+ * TODO move to a serializer?
+ * @param {import('../schema').PlaylistItem} playlistItem
+ * @param {import('../schema').Media} media
+ */
+export function legacyPlaylistItem(playlistItem, media) {
+  return {
+    _id: playlistItem.id,
+    artist: playlistItem.artist,
+    title: playlistItem.title,
+    start: playlistItem.start,
+    end: playlistItem.end,
+    media: {
+      _id: media.id,
+      sourceType: media.sourceType,
+      sourceID: media.sourceID,
+      sourceData: media.sourceData,
+      artist: media.artist,
+      title: media.title,
+      duration: media.duration,
+      thumbnail: media.thumbnail,
+    },
+    createdAt: playlistItem.createdAt,
+  };
+}
+
+/**
  * @typedef {object} GetPlaylistsQuery
  * @prop {MediaID} [contains]
  */
@@ -412,12 +438,9 @@ async function getPlaylistItem(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  const item = await playlists.getPlaylistItem(playlist, itemID);
-  if (!item) {
-    throw new PlaylistItemNotFoundError({ playlist, id: itemID });
-  }
+  const { playlistItem, media } = await playlists.getPlaylistItem(playlist, itemID);
 
-  return toItemResponse(item, { url: req.fullUrl });
+  return toItemResponse(legacyPlaylistItem(playlistItem, media), { url: req.fullUrl });
 }
 
 /**
@@ -456,10 +479,10 @@ async function updatePlaylistItem(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  const item = await playlists.getPlaylistItem(playlist, itemID);
-  const updatedItem = await playlists.updatePlaylistItem(item, patch);
+  const { playlistItem, media } = await playlists.getPlaylistItem(playlist, itemID);
+  const updatedItem = await playlists.updatePlaylistItem(playlistItem, patch);
 
-  return toItemResponse(updatedItem, { url: req.fullUrl });
+  return toItemResponse(legacyPlaylistItem(updatedItem, media), { url: req.fullUrl });
 }
 
 /**

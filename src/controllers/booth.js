@@ -25,25 +25,23 @@ import { Permissions } from '../plugins/acl.js';
 async function getBoothData(uw) {
   const { booth } = uw;
 
-  const historyEntry = await booth.getCurrentEntry();
-
-  if (!historyEntry || !historyEntry.user) {
+  const state = await booth.getCurrentEntry();
+  if (state == null) {
     return null;
   }
 
-  await historyEntry.populate('media.media');
   // @ts-expect-error TS2322: We just populated historyEntry.media.media
-  const media = booth.getMediaForPlayback(historyEntry);
+  const media = booth.getMediaForPlayback(state);
 
-  const stats = await booth.getCurrentVoteStats();
+  const votes = await booth.getCurrentVoteStats();
 
   return {
-    historyID: historyEntry.id,
-    playlistID: `${historyEntry.playlist}`,
-    playedAt: historyEntry.playedAt.getTime(),
-    userID: `${historyEntry.user}`,
+    historyID: state.historyEntry.id,
+    // playlistID: state.playlist.id,
+    playedAt: state.historyEntry.createdAt.getTime(),
+    userID: state.user.id,
     media,
-    stats,
+    stats: votes,
   };
 }
 
