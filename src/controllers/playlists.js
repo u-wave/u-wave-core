@@ -480,9 +480,9 @@ async function removePlaylistItem(req) {
     throw new PlaylistNotFoundError({ id });
   }
 
-  const result = await playlists.removePlaylistItems(playlist, [itemID]);
+  await playlists.removePlaylistItems(playlist, [itemID]);
 
-  return toItemResponse(result, { url: req.fullUrl });
+  return toItemResponse({}, { url: req.fullUrl });
 }
 
 export {

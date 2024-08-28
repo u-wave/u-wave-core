@@ -775,9 +775,9 @@ describe('Playlists', () => {
 
       const realItems = playlistItems.slice(15).map((item) => item.id);
       const itemsToMove = [
-        '604cee7e2d46ab05a8947ce2',
+        'c41f017d-d2a7-494f-8818-ebc0d02fa935',
         ...realItems,
-        '56fb09bd2268cb6678186df3',
+        'c7b20249-414f-4b6e-838c-d8588b10ab98',
       ];
 
       await supertest(uw.server)
@@ -914,9 +914,9 @@ describe('Playlists', () => {
 
       const realItems = playlistItems.slice(15).map((item) => item.id);
       const itemsToRemove = [
-        '604cee7e2d46ab05a8947ce2',
+        'ee5cf93f-592b-4d17-bc8a-3ef99fd2a37d',
         ...realItems,
-        '56fb09bd2268cb6678186df3',
+        'a50f21ef-cfbd-484c-bf13-77b3ff0d664c',
       ];
 
       await supertest(uw.server)

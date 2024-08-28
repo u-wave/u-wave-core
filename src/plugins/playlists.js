@@ -708,13 +708,21 @@ class PlaylistsRepository {
    * @param {PlaylistItemID[]} itemIDs
    */
   async removePlaylistItems(playlist, itemIDs) {
+    const { db } = this.#uw;
+
+    const rows = await db.selectFrom('playlists')
+      .innerJoin((eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'), (join) => join)
+      .select('playlistItemIDs.value as itemID')
+      .where('playlists.id', '=', playlist.id)
+      .execute();
+
     // Only remove items that are actually in this playlist.
     const set = new Set(itemIDs);
     /** @type {PlaylistItemID[]} */
     const toRemove = [];
     /** @type {PlaylistItemID[]} */
     const toKeep = [];
-    playlist.items.forEach((itemID) => {
+    rows.forEach(({ itemID }) => {
       if (set.has(itemID)) {
         toRemove.push(itemID);
       } else {
@@ -722,11 +730,16 @@ class PlaylistsRepository {
       }
     });
 
-    playlist.items = toKeep;
-    await playlist.save();
-    await PlaylistItem.deleteMany({ _id: { $in: toRemove } });
 
-    return {};
+    await db.transaction().execute(async (tx) => {
+      await tx.updateTable('playlists')
+        .where('id', '=', playlist.id)
+        .set({ items: jsonb(toKeep) })
+        .execute();
+      await tx.deleteFrom('playlistItems')
+        .where('id', 'in', toRemove)
+        .execute();
+    });
   }
 }
 
