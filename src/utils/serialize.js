@@ -14,6 +14,31 @@ export function serializePlaylist(model) {
 
 /**
  * @param {{
+ *   id: import('../schema.js').MediaID,
+ *   sourceType: string,
+ *   sourceID: string,
+ *   sourceData?: import('type-fest').JsonObject | null,
+ *   artist: string,
+ *   title: string,
+ *   duration: number,
+ *   thumbnail: string,
+ * }} model
+ */
+export function serializeMedia(model) {
+  return {
+    _id: model.id,
+    sourceType: model.sourceType,
+    sourceID: model.sourceID,
+    sourceData: model.sourceData,
+    artist: model.artist,
+    title: model.title,
+    duration: model.duration,
+    thumbnail: model.thumbnail,
+  }
+}
+
+/**
+ * @param {{
  *   id: import('../schema.js').PlaylistItemID,
  *   media: import('../schema.js').Media,
  *   artist: string,
@@ -27,7 +52,7 @@ export function serializePlaylist(model) {
 export function serializePlaylistItem(model) {
   return {
     _id: model.id,
-    media: model.media,
+    media: serializeMedia(model.media),
     artist: model.artist,
     title: model.title,
     start: model.start,
