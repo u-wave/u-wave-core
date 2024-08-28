@@ -13,7 +13,7 @@ describe('Booth', () => {
       await uw.destroy();
     });
 
-    const historyID = '602907622d46ab05a89449f3';
+    const historyID = '7e8c3ef1-6670-4b52-b334-0c93df924507';
 
     it('requires authentication', async () => {
       await supertest(uw.server)
