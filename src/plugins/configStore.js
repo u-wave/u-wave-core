@@ -14,6 +14,8 @@ import { jsonb } from '../utils/sqlite.js';
  * @typedef {import('../schema.js').User} User
  */
 
+const CONFIG_UPDATE_MESSAGE = 'configStore:update';
+
 /**
  * Extensible configuration store.
  *
@@ -30,7 +32,7 @@ class ConfigStore {
 
   #ajv;
 
-  #emitter;
+  #emitter = new EventEmitter();
 
   /** @type {Map<string, import('ajv').ValidateFunction<unknown>>} */
   #validators = new Map();
@@ -56,13 +58,11 @@ class ConfigStore {
       fs.readFileSync(new URL('../schemas/definitions.json', import.meta.url), 'utf8'),
     ));
 
-    this.#emitter = new EventEmitter();
-    this.#subscriber.subscribe('uwave').catch((error) => {
-      this.#logger.error(error);
-    });
     this.#subscriber.on('message', (_channel, command) => {
       this.#onServerMessage(command);
     });
+
+    uw.use(async () => this.#subscriber.subscribe('uwave'));
   }
 
   /**
@@ -80,9 +80,11 @@ class ConfigStore {
       return;
     }
     const { command, data } = json;
-    if (command !== 'configStore:update') {
+    if (command !== CONFIG_UPDATE_MESSAGE) {
       return;
     }
+
+    this.#logger.trace({ command, data }, 'handle config update');
 
     try {
       const updatedSettings = await this.get(data.key);
@@ -193,6 +195,7 @@ class ConfigStore {
     const validate = this.#validators.get(key);
     if (validate) {
       if (!validate(settings)) {
+        this.#logger.trace({ key, errors: validate.errors }, 'config validation error');
         throw new ValidationError(validate.errors, this.#ajv);
       }
     }
@@ -200,7 +203,8 @@ class ConfigStore {
     const oldSettings = await this.#save(key, settings);
     const patch = jsonMergePatch.generate(oldSettings, settings) ?? Object.create(null);
 
-    this.#uw.publish('configStore:update', {
+    this.#logger.trace({ key, patch }, 'fire config update');
+    await this.#uw.publish(CONFIG_UPDATE_MESSAGE, {
       key,
       user: user ? user.id : null,
       patch,

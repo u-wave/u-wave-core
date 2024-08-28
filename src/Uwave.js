@@ -435,10 +435,7 @@ class UwaveServer extends EventEmitter {
    * @param {import('./redisMessages.js').ServerActionParameters[CommandName]} data
    */
   publish(command, data) {
-    this.redis.publish('uwave', JSON.stringify({
-      command, data,
-    }));
-    return this;
+    return this.redis.publish('uwave', JSON.stringify({ command, data }));
   }
 
   async listen() {
