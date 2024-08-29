@@ -63,7 +63,16 @@ export function serializePlaylistItem(model) {
 }
 
 /**
- * @param {import('../schema.js').User} model
+ * @param {{
+ *   id: import('../schema.js').UserID,
+ *   username: string,
+ *   slug: string,
+ *   roles: string[],
+ *   avatar: string | null,
+ *   activePlaylistID?: string | null,
+ *   createdAt: Date,
+ *   updatedAt?: Date,
+ * }} model
  */
 export function serializeUser(model) {
   return {
@@ -75,6 +84,6 @@ export function serializeUser(model) {
     activePlaylist: model.activePlaylistID,
     createdAt: model.createdAt.toISOString(),
     updatedAt: model.updatedAt?.toISOString(),
-    lastSeenAt: model.lastSeenAt?.toISOString(),
+    // lastSeenAt: model.lastSeenAt?.toISOString(),
   };
 }

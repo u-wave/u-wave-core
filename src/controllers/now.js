@@ -35,20 +35,12 @@ function toInt(str) {
  * @param {import('../Uwave.js').default} uw
  */
 async function getOnlineUsers(uw) {
-  const { db } = uw;
-
   const userIDs = /** @type {UserID[]} */ (await uw.redis.lrange('users', 0, -1));
   if (userIDs.length === 0) {
     return [];
   }
 
-  const users = await db.selectFrom('users')
-    .where('id', 'in', userIDs)
-    .select(['id', 'username', 'slug', 'createdAt'])
-    .execute();
-  // TODO remove
-  users.forEach((user) => user.roles = [])
-
+  const users = await uw.users.getUsersByIds(userIDs);
   return users.map(serializeUser);
 }
 

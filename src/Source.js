@@ -7,21 +7,33 @@ import { SourceNoImportError } from './errors/index.js';
  */
 
 /**
+ * @typedef {{
+ *   sourceType: string,
+ *   sourceID: string,
+ *   sourceData: import('type-fest').JsonObject | null,
+ *   artist: string,
+ *   title: string,
+ *   duration: number,
+ *   thumbnail: string,
+ * }} SourceMedia
+ */
+
+/**
  * @typedef {object} SourcePluginV1
  * @prop {undefined|1} api
- * @prop {(ids: string[]) => Promise<PlaylistItemDesc[]>} get
- * @prop {(query: string, page: unknown, ...args: unknown[]) => Promise<PlaylistItemDesc[]>} search
+ * @prop {(ids: string[]) => Promise<SourceMedia[]>} get
+ * @prop {(query: string, page: unknown, ...args: unknown[]) => Promise<SourceMedia[]>} search
  * @prop {(context: ImportContext, ...args: unknown[]) => Promise<unknown>} [import]
  *
  * @typedef {object} SourcePluginV2
  * @prop {2} api
- * @prop {(context: SourceContext, ids: string[]) => Promise<PlaylistItemDesc[]>} get
+ * @prop {(context: SourceContext, ids: string[]) => Promise<SourceMedia[]>} get
  * @prop {(
  *   context: SourceContext,
  *   query: string,
  *   page: unknown,
  *   ...args: unknown[]
- * ) => Promise<PlaylistItemDesc[]>} search
+ * ) => Promise<SourceMedia[]>} search
  * @prop {(context: ImportContext, ...args: unknown[]) => Promise<unknown>} [import]
  * @prop {(context: SourceContext, entry: PlaylistItemDesc) =>
  *     Promise<import('type-fest').JsonObject>} [play]
@@ -101,8 +113,9 @@ class Source {
    * Media items can provide their own sourceType, too, so media sources can
    * aggregate items from different source types.
    *
-   * @param {Omit<PlaylistItemDesc, 'sourceType'>[]} items
-   * @returns {PlaylistItemDesc[]}
+   * @template T
+   * @param {T[]} items
+   * @returns {(T & { sourceType: string })[]}
    */
   addSourceType(items) {
     return items.map((item) => ({
@@ -116,7 +129,7 @@ class Source {
    *
    * @param {User} user
    * @param {string} id
-   * @returns {Promise<PlaylistItemDesc?>}
+   * @returns {Promise<SourceMedia?>}
    */
   getOne(user, id) {
     return this.get(user, [id])
@@ -128,7 +141,7 @@ class Source {
    *
    * @param {User} user
    * @param {string[]} ids
-   * @returns {Promise<PlaylistItemDesc[]>}
+   * @returns {Promise<SourceMedia[]>}
    */
   async get(user, ids) {
     let items;
@@ -150,7 +163,7 @@ class Source {
    * @param {string} query
    * @param {TPagination} [page]
    * @param {unknown[]} args
-   * @returns {Promise<PlaylistItemDesc[]>}
+   * @returns {Promise<SourceMedia[]>}
    */
   async search(user, query, page, ...args) {
     let results;

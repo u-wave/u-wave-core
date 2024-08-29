@@ -31,19 +31,6 @@ const avatarColumn = (eb) => eb.fn.coalesce(
   /** @type {import('kysely').RawBuilder<string>} */ (sql`concat('https://sigil.u-wave.net/', ${eb.ref('users.id')})`),
 );
 
-/** @type {import('kysely').SelectExpression<import('../schema.js').Database, 'users'>[]} */
-const userSelection = [
-  'users.id',
-  'users.username',
-  'users.slug',
-  'users.activePlaylistID',
-  'users.pendingActivation',
-  'users.createdAt',
-  'users.updatedAt',
-  (eb) => avatarColumn(eb).as('avatar'),
-  (eb) => userRolesColumn(eb).as('roles'),
-]
-
 class UsersRepository {
   #uw;
 
@@ -69,20 +56,32 @@ class UsersRepository {
       limit = 50,
     } = pagination;
 
-    let baseQuery = db.selectFrom('users');
+    let query = db.selectFrom('users')
+      .select([
+        'users.id',
+        'users.username',
+        'users.slug',
+        'users.activePlaylistID',
+        'users.pendingActivation',
+        'users.createdAt',
+        'users.updatedAt',
+        (eb) => avatarColumn(eb).as('avatar'),
+        (eb) => userRolesColumn(eb).as('roles'),
+      ])
+      .offset(offset)
+      .limit(limit);
     if (filter != null) {
-      baseQuery = baseQuery.where('username', 'like', filter);
+      query = query.where('username', 'like', `%${filter}%`);
     }
 
     const totalQuery = db.selectFrom('users')
-      .select((eb) => eb.fn.countAll().as('count'));
+      .select((eb) => eb.fn.countAll().as('count'))
+      .executeTakeFirstOrThrow();
 
-    const filteredQuery = filter == null ? totalQuery : baseQuery.select((eb) => eb.fn.countAll().as('count'));
-
-    const query = baseQuery
-      .offset(offset)
-      .limit(limit)
-      .select(userSelection);
+    const filteredQuery = filter == null ? totalQuery : db.selectFrom('users')
+      .select((eb) => eb.fn.countAll().as('count'))
+      .where('username', 'like', `%${filter}%`)
+      .executeTakeFirstOrThrow();
 
     const [
       users,
@@ -90,8 +89,8 @@ class UsersRepository {
       total,
     ] = await Promise.all([
       query.execute(),
-      filteredQuery.executeTakeFirstOrThrow(),
-      totalQuery.executeTakeFirstOrThrow(),
+      filteredQuery,
+      totalQuery,
     ]);
 
     return new Page(users, {
@@ -112,19 +111,37 @@ class UsersRepository {
    * @param {UserID} id
    */
   async getUser(id) {
+    const [user] = await this.getUsersByIds([id]);
+    return user ?? null;
+  }
+
+  /**
+   * @param {UserID[]} ids
+   */
+  async getUsersByIds(ids) {
     const { db } = this.#uw;
 
-    const user = await db.selectFrom('users')
-      .where('id', '=', id)
-      .select(userSelection)
-      .executeTakeFirst();
+    const users = await db.selectFrom('users')
+      .where('id', 'in', ids)
+      .select([
+        'users.id',
+        'users.username',
+        'users.slug',
+        'users.activePlaylistID',
+        'users.pendingActivation',
+        'users.createdAt',
+        'users.updatedAt',
+        (eb) => avatarColumn(eb).as('avatar'),
+        (eb) => userRolesColumn(eb).as('roles'),
+      ])
+      .execute();
 
-    if (user == null) {
-      return null;
+    for (const user of users) {
+      const roles = /** @type {string[]} */ (JSON.parse(/** @type {string} */ (/** @type {unknown} */ (user.roles))));
+      Object.assign(user, { roles });
     }
 
-    const roles = /** @type {string[]} */ (JSON.parse(/** @type {string} */ (/** @type {unknown} */ (user.roles))));
-    return Object.assign(user, { roles });
+    return /** @type {import('type-fest').SetNonNullable<(typeof users)[0], 'roles'>[]} */ (users);
   }
 
   /**
@@ -156,7 +173,17 @@ class UsersRepository {
   async localLogin({ email, password }) {
     const user = await this.#uw.db.selectFrom('users')
       .where('email', '=', email)
-      .select([...userSelection, 'password'])
+      .select([
+        'users.id',
+        'users.username',
+        'users.slug',
+        (eb) => avatarColumn(eb).as('avatar'),
+        'users.activePlaylistID',
+        'users.pendingActivation',
+        'users.createdAt',
+        'users.updatedAt',
+        'users.password',
+      ])
       .executeTakeFirst();
     if (!user) {
       throw new UserNotFoundError({ email });
@@ -218,7 +245,13 @@ class UsersRepository {
           'authServices.service',
           'authServices.serviceID',
           'authServices.serviceAvatar',
-          ...userSelection,
+          'users.id',
+          'users.username',
+          'users.slug',
+          'users.activePlaylistID',
+          'users.pendingActivation',
+          'users.createdAt',
+          'users.updatedAt',
         ])
         .executeTakeFirst();
 
@@ -237,7 +270,7 @@ class UsersRepository {
             id: /** @type {UserID} */ (randomUUID()),
             username: username ? username.replace(/\s/g, '') : `${type}.${id}`,
             slug: slugify(username),
-            pendingActivation: true, // type,
+            pendingActivation: true,
             avatar,
           })
           .returningAll()

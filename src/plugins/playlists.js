@@ -552,25 +552,23 @@ class PlaylistsRepository {
 
       if (unknownMediaIDs.length > 0) {
         // @ts-expect-error TS2322
-        const unknownMedias = await this.#uw.source(sourceType)
-          .get(user, unknownMediaIDs);
-        const toInsert = unknownMedias.map((media) => /** @type {Media} */ ({
-          id: /** @type {MediaID} */ (randomUUID()),
-          sourceType: media.sourceType,
-          sourceID: media.sourceID,
-          sourceData: jsonb(media.sourceData),
-          artist: media.artist,
-          title: media.title,
-          duration: media.duration,
-          thumbnail: media.thumbnail,
-        }));
-        const inserted = await db.insertInto('media')
-          .values(toInsert)
-          .returningAll()
-          .execute();
+        const unknownMedias = await this.#uw.source(sourceType).get(user, unknownMediaIDs);
+        for (const media of unknownMedias) {
+          const newMedia = await db.insertInto('media')
+            .values({
+              id: /** @type {MediaID} */ (randomUUID()),
+              sourceType: media.sourceType,
+              sourceID: media.sourceID,
+              sourceData: jsonb(media.sourceData),
+              artist: media.artist,
+              title: media.title,
+              duration: media.duration,
+              thumbnail: media.thumbnail,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
 
-        for (const media of inserted) {
-          allMedias.set(`${media.sourceType}:${media.sourceID}`, media);
+          allMedias.set(`${media.sourceType}:${media.sourceID}`, newMedia);
         }
       }
     });
