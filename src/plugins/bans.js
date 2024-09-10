@@ -75,7 +75,7 @@ class Bans {
 
     const total = await User.find().where(queryFilter).countDocuments();
 
-    const bannedUsers = /** @type {(import('../models/User.js').LeanUser & { banned: LeanBanned })[]} */ (
+    const bannedUsers = /** @type {(LeanUser & { banned: LeanBanned })[]} */ (
       await User.find()
         .where(queryFilter)
         .skip(offset)
