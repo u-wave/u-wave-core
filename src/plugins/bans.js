@@ -75,13 +75,14 @@ class Bans {
 
     const total = await User.find().where(queryFilter).countDocuments();
 
-    /** @type {(import('../models/User.js').LeanUser & { banned: LeanBanned })[]} */
-    const bannedUsers = await User.find()
-      .where(queryFilter)
-      .skip(offset)
-      .limit(size)
-      .populate('banned.moderator')
-      .lean();
+    const bannedUsers = /** @type {(import('../models/User.js').LeanUser & { banned: LeanBanned })[]} */ (
+      await User.find()
+        .where(queryFilter)
+        .skip(offset)
+        .limit(size)
+        .populate('banned.moderator')
+        .lean()
+    );
 
     const results = bannedUsers.map((user) => ({
       ...user.banned,
