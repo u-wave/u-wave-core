@@ -531,16 +531,14 @@ const styleRules = {
   'wrap-regex': 'off',
 };
 
-const ignores = ['types/**/*'];
-
 export default ts.config(
-  { ignores, ...js.configs.recommended },
-  { ignores, ...importPlugin.flatConfigs.recommended },
-  { ignores, ...importPlugin.flatConfigs.typescript },
-  { ignores, ...nodePlugin.configs['flat/recommended-module'] },
-  ...ts.configs.recommended.map((config) => ({ ignores, ...config })),
+  { ignores: ['types/**/*'] },
+  js.configs.recommended,
+  importPlugin.flatConfigs.recommended,
+  importPlugin.flatConfigs.typescript,
+  nodePlugin.configs['flat/recommended-module'],
+  ...ts.configs.recommended,
   {
-    ignores,
     languageOptions: {
       parserOptions: {
         ecmaVersion: 2022,
@@ -586,7 +584,7 @@ export default ts.config(
     },
   },
 
-  { ignores, rules: styleRules },
+  { rules: styleRules },
 
   {
     files: ['*.cjs'],
