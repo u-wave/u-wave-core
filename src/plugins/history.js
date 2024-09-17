@@ -49,7 +49,6 @@ class HistoryRepository {
     /** @type {import('mongoose').PipelineStage[]} */
     const aggregate = [];
     if (filter != null) {
-      // @ts-expect-error TS2322: promise
       aggregate.push({ $match: filter });
     }
     aggregate.push(
