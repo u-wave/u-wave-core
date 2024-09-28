@@ -36,6 +36,8 @@ declare module 'ioredis' {
     'uw:addToWaitlist'(...args: [...keys: string[], userId: string]): Promise<string[]>;
     /** Run the move-waitlist script, declared in src/plugins/waitlist.js. */
     'uw:moveWaitlist'(...args: [...keys: string[], userId: string, position: number]): Promise<string[]>;
+    /** Run the remove-after-current-play script, declared in src/plugins/booth.js. */
+    'uw:removeAfterCurrentPlay'(...args: [...keys: string[], userId: string, remove: boolean]): Promise<0 | 1>;
   }
 }
 

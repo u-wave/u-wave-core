@@ -19,6 +19,13 @@ function boothRoutes() {
       schema(validations.skipBooth),
       route(controller.skipBooth),
     )
+    // PUT /booth/leave - Auto-remove the current DJ on the next advance.
+    .put(
+      '/leave',
+      protect(),
+      schema(validations.leaveBooth),
+      route(controller.leaveBooth),
+    )
     // GET /booth/:historyID/vote - Get the current user's vote for the current play.
     .get(
       '/:historyID/vote',
