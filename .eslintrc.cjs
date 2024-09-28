@@ -639,11 +639,10 @@ module.exports = {
         'jsdoc/no-defaults': 'warn',
         'jsdoc/no-multi-asterisks': 'warn',
         'jsdoc/no-undefined-types': 'warn',
-        'jsdoc/require-jsdoc': 'warn',
-        'jsdoc/require-param': 'warn',
+        'jsdoc/require-param': ['warn', { enableFixer: false }],
         'jsdoc/require-param-name': 'warn',
         'jsdoc/require-param-type': 'warn',
-        'jsdoc/require-property': 'warn',
+        'jsdoc/require-property': ['warn', { enableFixer: false }],
         'jsdoc/require-property-name': 'warn',
         'jsdoc/require-property-type': 'warn',
         // 'jsdoc/require-returns': 'warn',
@@ -651,8 +650,15 @@ module.exports = {
         // 'jsdoc/require-returns-type': 'warn',
         'jsdoc/require-yields': 'warn',
         'jsdoc/require-yields-check': 'warn',
-        'jsdoc/tag-lines': 'warn',
+        'jsdoc/tag-lines': ['warn', 'never', { startLines: 1 }],
         'jsdoc/valid-types': 'warn',
+      },
+      settings: {
+        jsdoc: {
+          tagNamePreference: {
+            property: 'prop',
+          },
+        },
       },
     },
     {
