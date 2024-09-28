@@ -54,7 +54,7 @@ class Bans {
 
     let query = db.selectFrom('bans')
       .innerJoin('users', 'users.id', 'bans.userID')
-      .leftJoin('users as mod', 'users.id', 'bans.moderatorID')
+      .leftJoin('users as mod', 'mod.id', 'bans.moderatorID')
       .select([
         'users.id as users.id',
         'users.username as users.username',
@@ -93,14 +93,17 @@ class Bans {
         createdAt: row['users.createdAt'],
         updatedAt: row['users.updatedAt'],
       },
-      moderator: {
+      moderator: row['mod.id'] != null ? {
         id: row['mod.id'],
         username: row['mod.username'],
         slug: row['mod.slug'],
         createdAt: row['mod.createdAt'],
         updatedAt: row['mod.updatedAt'],
-      },
+      } : null,
       reason: row.reason,
+      duration: row.expiresAt != null
+        ? Math.floor((new Date(row.expiresAt).getTime() - new Date(row.createdAt).getTime()) / 1000) * 1000
+        : 0,
       expiresAt: row.expiresAt,
       createdAt: row.createdAt,
     }));
@@ -134,14 +137,17 @@ class Bans {
       throw new Error('Ban duration should be at least 0ms.');
     }
 
+    const expiresAt = permanent
+      ? null
+      : new Date(Math.floor(Date.now() / 1000) * 1000 + duration)
     const ban = {
       userID: user.id,
       moderatorID: moderator.id,
-      expiresAt: permanent ? null : new Date(Date.now() + duration),
+      expiresAt,
       reason: reason || null,
     };
 
-    const _result = await db.insertInto('bans')
+    await db.insertInto('bans')
       .values(ban)
       .executeTakeFirstOrThrow();
 

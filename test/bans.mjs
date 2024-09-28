@@ -84,7 +84,7 @@ describe('Bans', () => {
 
       assert.strictEqual(res.body.meta.results, 1);
       sinon.assert.match(res.body.data[0], {
-        duration: 36000000,
+        duration: ms('10 hours'),
         expiresAt: sinon.match.string,
         reason: 'just to test',
         moderator: user.id,
