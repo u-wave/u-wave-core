@@ -368,7 +368,7 @@ describe('Playlists', () => {
   describe('GET /playlists/:id/media', () => {
     let playlist;
     beforeEach(async () => {
-      ;({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const items = await generateItems(200);
       await uw.playlists.addPlaylistItems(playlist, items);
     });
@@ -501,7 +501,7 @@ describe('Playlists', () => {
   describe('POST /playlists/:id/media', () => {
     let playlist;
     beforeEach(async () => {
-      ;({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
     });
 
     it('requires authentication', async () => {
@@ -663,7 +663,7 @@ describe('Playlists', () => {
     let playlist;
     let playlistItems;
     beforeEach(async () => {
-      ;({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       const { added } = await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
       playlistItems = added;
@@ -801,7 +801,7 @@ describe('Playlists', () => {
   describe('POST /playlists/:id/shuffle', () => {
     let playlist;
     beforeEach(async () => {
-      ;({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
     });
@@ -838,7 +838,7 @@ describe('Playlists', () => {
     let playlist;
     let playlistItems;
     beforeEach(async () => {
-      ;({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       const { added } = await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
       playlistItems = added;

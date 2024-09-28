@@ -25,7 +25,6 @@ alwaysTrue.errors = null;
  * @prop {import('ajv').SchemaObject} [body]
  * @prop {import('ajv').SchemaObject} [params]
  * @prop {import('ajv').SchemaObject} [query]
- *
  * @param {Schemas} schemas
  * @returns {import('express').RequestHandler}
  */

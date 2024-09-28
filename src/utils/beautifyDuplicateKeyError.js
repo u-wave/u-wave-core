@@ -18,7 +18,7 @@ function isDuplicateKeyError(error) {
  * Turn duplicate key errors from Mongo into useful-for-humans error messages.
  *
  * @param {Error} error Error instance that may be a duplicate key error.
- * @return {Error} More useful error if a MongoDB duplicate key error was given,
+ * @returns {Error} More useful error if a MongoDB duplicate key error was given,
  *    otherwise the given error, unchanged.
  */
 function beautifyDuplicateKeyError(error) {

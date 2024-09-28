@@ -33,7 +33,6 @@ const { BadRequest } = httpErrors;
  *   import('nodemailer').SendMailOptions} createPasswordResetEmail
  * @prop {boolean} [cookieSecure]
  * @prop {string} [cookiePath]
- *
  * @typedef {object} WithAuthOptions
  * @prop {AuthenticateOptions} authOptions
  */
@@ -103,7 +102,6 @@ async function refreshSession(res, api, user, options) {
  *
  * @typedef {object} LoginQuery
  * @prop {'cookie'|'token'} [session]
- *
  * @param {import('../types.js').AuthenticatedRequest<{}, LoginQuery, {}> & WithAuthOptions} req
  * @param {import('express').Response} res
  */
@@ -214,7 +212,6 @@ async function socialLoginCallback(service, req, res) {
 /**
  * @typedef {object} SocialLoginFinishQuery
  * @prop {'cookie'|'token'} [session]
- *
  * @typedef {object} SocialLoginFinishBody
  * @prop {string} username
  * @prop {string} avatar
@@ -410,7 +407,6 @@ async function reset(req) {
 /**
  * @typedef {object} ChangePasswordParams
  * @prop {string} reset
- *
  * @typedef {object} ChangePasswordBody
  * @prop {string} password
  */

@@ -70,16 +70,16 @@ async function getState(req) {
   const waitlistLocked = uw.waitlist.isLocked();
   let activePlaylist = user?.activePlaylistID
     ? uw.playlists.getUserPlaylist(user, user.activePlaylistID).catch((error) => {
-        // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
-        // playlist should never be listed as the active playlist. Most likely this is not the
-        // user's fault, so we should not error out on `/api/now`. Instead, pretend they don't have
-        // an active playlist at all. Clients can then let them select a new playlist to activate.
-        if (error.code === 'NOT_FOUND' || error.code === 'playlist-not-found') {
-          req.log.warn('The active playlist does not exist', { error });
-          return null;
-        }
-        throw error;
-      })
+      // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
+      // playlist should never be listed as the active playlist. Most likely this is not the
+      // user's fault, so we should not error out on `/api/now`. Instead, pretend they don't have
+      // an active playlist at all. Clients can then let them select a new playlist to activate.
+      if (error.code === 'NOT_FOUND' || error.code === 'playlist-not-found') {
+        req.log.warn('The active playlist does not exist', { error });
+        return null;
+      }
+      throw error;
+    })
     : Promise.resolve(null);
   const playlists = user ? uw.playlists.getUserPlaylists(user) : null;
   const firstActivePlaylistItem = activePlaylist.then((playlist) => playlist ? getFirstItem(uw, playlist) : null);

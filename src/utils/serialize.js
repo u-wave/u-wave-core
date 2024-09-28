@@ -34,7 +34,7 @@ export function serializeMedia(model) {
     title: model.title,
     duration: model.duration,
     thumbnail: model.thumbnail,
-  }
+  };
 }
 
 /**

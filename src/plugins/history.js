@@ -85,7 +85,6 @@ function historyEntryFromRow(row) {
  * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('../schema.js').MediaID} MediaID
  * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
- *
  * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
  * @typedef {import('../schema.js').User} User
  * @typedef {import('../schema.js').Media} Media

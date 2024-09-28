@@ -24,7 +24,6 @@ import { SourceNoImportError } from './errors/index.js';
  * @prop {(ids: string[]) => Promise<SourceMedia[]>} get
  * @prop {(query: string, page: unknown, ...args: unknown[]) => Promise<SourceMedia[]>} search
  * @prop {(context: ImportContext, ...args: unknown[]) => Promise<unknown>} [import]
- *
  * @typedef {object} SourcePluginV2
  * @prop {2} api
  * @prop {(context: SourceContext, ids: string[]) => Promise<SourceMedia[]>} get
@@ -37,7 +36,6 @@ import { SourceNoImportError } from './errors/index.js';
  * @prop {(context: ImportContext, ...args: unknown[]) => Promise<unknown>} [import]
  * @prop {(context: SourceContext, entry: PlaylistItemDesc) =>
  *     Promise<import('type-fest').JsonObject>} [play]
- *
  * @typedef {SourcePluginV1 | SourcePluginV2} SourcePlugin
  */
 

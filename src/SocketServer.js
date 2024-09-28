@@ -107,6 +107,7 @@ class SocketServer {
 
   /**
    * Handlers for commands that come in from clients.
+   *
    * @type {ClientActions}
    */
   #clientActions;
@@ -445,6 +446,7 @@ class SocketServer {
   /**
    * Create `LostConnection`s for every user that's known to be online, but that
    * is not currently connected to the socket server.
+   *
    * @private
    */
   async initLostConnections() {
@@ -658,7 +660,7 @@ class SocketServer {
    *
    * @param {string} channel
    * @param {string} rawCommand
-   * @return {Promise<void>}
+   * @returns {Promise<void>}
    * @private
    */
   async onServerMessage(channel, rawCommand) {
@@ -685,7 +687,7 @@ class SocketServer {
   /**
    * Stop the socket server.
    *
-   * @return {Promise<void>}
+   * @returns {Promise<void>}
    */
   async destroy() {
     clearInterval(this.#pinger);
@@ -706,7 +708,7 @@ class SocketServer {
    * Get the connection instance for a specific user.
    *
    * @param {User|string} user The user.
-   * @return {Connection|undefined}
+   * @returns {Connection|undefined}
    */
   connection(user) {
     const userID = typeof user === 'object' ? user.id : user;

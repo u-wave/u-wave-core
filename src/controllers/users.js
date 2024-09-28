@@ -149,7 +149,6 @@ async function removeUserRole(req) {
 /**
  * @typedef {object} ChangeUsernameParams
  * @prop {UserID} id
- *
  * @typedef {object} ChangeUsernameBody
  * @prop {string} username
  */

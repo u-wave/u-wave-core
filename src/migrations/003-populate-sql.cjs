@@ -61,7 +61,7 @@ async function up({ context: uw }) {
     const permissionRows = Object.entries(roleMap).map(([role, permissions]) => ({
       id: role,
       permissions: jsonb(
-        permissions.flatMap((perm) => perm.includes('.') || perm === '*' ? [perm] : roleMap[perm])
+        permissions.flatMap((perm) => perm.includes('.') || perm === '*' ? [perm] : roleMap[perm]),
       ),
     }));
 

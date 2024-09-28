@@ -86,7 +86,6 @@ async function doSkip(uw, moderatorID, userID, reason, opts = {}) {
  * @typedef {object} SkipUserAndReason
  * @prop {UserID} userID
  * @prop {string} reason
- *
  * @typedef {{
  *   remove?: boolean,
  *   userID?: UserID,
@@ -249,7 +248,6 @@ async function getVote(req) {
 /**
  * @typedef {object} VoteParams
  * @prop {HistoryEntryID} historyID
- *
  * @typedef {object} VoteBody
  * @prop {1|-1} direction
  */

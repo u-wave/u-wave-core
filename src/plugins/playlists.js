@@ -9,7 +9,9 @@ import Page from '../Page.js';
 import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle } from '../utils/sqlite.js';
+import {
+  arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle,
+} from '../utils/sqlite.js';
 import Multimap from '../utils/Multimap.js';
 
 /**
@@ -17,7 +19,6 @@ import Multimap from '../utils/Multimap.js';
  * @typedef {import('../schema.js').MediaID} MediaID
  * @typedef {import('../schema.js').PlaylistID} PlaylistID
  * @typedef {import('../schema.js').PlaylistItemID} PlaylistItemID
- *
  * @typedef {import('../schema.js').User} User
  * @typedef {import('../schema.js').Playlist} Playlist
  * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
@@ -71,7 +72,7 @@ const playlistItemSelection = /** @type {const} */ ([
   'playlistItems.end',
   'playlistItems.createdAt',
   'playlistItems.updatedAt',
-])
+]);
 
 /**
  * @param {{
@@ -90,7 +91,7 @@ const playlistItemSelection = /** @type {const} */ ([
  *   end: number,
  * }} raw
  */
-function playlistItemFromSelection (raw) {
+function playlistItemFromSelection(raw) {
   return {
     _id: raw.id,
     artist: raw.artist,
@@ -107,7 +108,7 @@ function playlistItemFromSelection (raw) {
       sourceType: raw['media.sourceType'],
       sourceData: raw['media.sourceData'],
     },
-  }
+  };
 }
 
 /**
@@ -129,7 +130,7 @@ function playlistItemFromSelection (raw) {
  *   updatedAt: Date,
  * }} raw
  */
-function playlistItemFromSelectionNew (raw) {
+function playlistItemFromSelectionNew(raw) {
   return {
     playlistItem: {
       id: raw.id,
@@ -151,7 +152,7 @@ function playlistItemFromSelectionNew (raw) {
       sourceType: raw['media.sourceType'],
       sourceData: raw['media.sourceData'],
     },
-  }
+  };
 }
 
 class PlaylistsRepository {
@@ -334,7 +335,7 @@ class PlaylistsRepository {
       throw new ItemNotInPlaylistError({ playlistID: playlist.id, itemID });
     }
 
-    return playlistItemFromSelectionNew(raw)
+    return playlistItemFromSelectionNew(raw);
   }
 
   /**
@@ -349,10 +350,10 @@ class PlaylistsRepository {
       .where('playlistItems.id', '=', (eb) => {
         /** @type {import('kysely').RawBuilder<PlaylistItemID>} */
         // items->>order doesn't work for some reason, not sure why
-        const item =  sql`json_extract(items, ${`$[${order}]`})`
+        const item =  sql`json_extract(items, ${`$[${order}]`})`;
         return eb.selectFrom('playlists')
           .select(item.as('playlistItemID'))
-          .where('id', '=', playlist.id)
+          .where('id', '=', playlist.id);
       })
       .innerJoin('media', 'media.id', 'playlistItems.mediaID')
       .select(playlistItemSelection)
@@ -362,7 +363,7 @@ class PlaylistsRepository {
       throw new ItemNotInPlaylistError({ playlistID: playlist.id });
     }
 
-    return playlistItemFromSelectionNew(raw)
+    return playlistItemFromSelectionNew(raw);
   }
 
   /**
@@ -446,7 +447,6 @@ class PlaylistsRepository {
    * @typedef {object} GetPlaylistsContainingMediaOptions
    * @prop {UserID} [author]
    * @prop {string[]} [fields]
-   *
    * @param {MediaID} mediaID
    * @param {GetPlaylistsContainingMediaOptions} options
    */
@@ -464,9 +464,9 @@ class PlaylistsRepository {
       ])
       .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
       .where('playlistItems.mediaID', '=', mediaID)
-      .groupBy('playlistItems.playlistID')
+      .groupBy('playlistItems.playlistID');
     if (options.author) {
-      query = query.where('playlists.userID', '=', options.author)
+      query = query.where('playlists.userID', '=', options.author);
     }
 
     const playlists = await query.execute();
@@ -503,7 +503,7 @@ class PlaylistsRepository {
       ])
       .where('playlistItems.mediaID', 'in', mediaIDs);
     if (options.author) {
-      query = query.where('playlists.userID', '=', options.author)
+      query = query.where('playlists.userID', '=', options.author);
     }
 
     const playlists = await query.execute();
@@ -774,7 +774,6 @@ class PlaylistsRepository {
         toKeep.push(itemID);
       }
     });
-
 
     await db.transaction().execute(async (tx) => {
       await tx.updateTable('playlists')

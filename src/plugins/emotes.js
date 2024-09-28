@@ -21,7 +21,6 @@ const schema = JSON.parse(
  *   channels: string[],
  * }} TwitchSettings
  * @typedef {{ twitch: TwitchSettings }} EmotesSettings
- *
  * @typedef {{ id: string, code: string, imageType: string, animated: boolean }} BTTVEmote
  * @typedef {{ id: string, name: string }} FFZEmote
  * @typedef {{ emoticons: FFZEmote[] }} FFZEmoteSet
@@ -76,9 +75,9 @@ async function fetchJSON(url) {
 }
 
 /**
-* @param {BTTVEmote} bttv
-* @returns {Emote}
-*/
+ * @param {BTTVEmote} bttv
+ * @returns {Emote}
+ */
 function fromBTTVEmote(bttv) {
   return {
     // The `replace` is basically just for :tf: …
@@ -131,9 +130,9 @@ async function getBTTVEmotes(channels) {
 }
 
 /**
-* @param {FFZEmote} emote
-* @returns {Emote}
-*/
+ * @param {FFZEmote} emote
+ * @returns {Emote}
+ */
 function fromFFZEmote(emote) {
   return {
     name: emote.name,

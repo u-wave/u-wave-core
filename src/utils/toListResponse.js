@@ -12,7 +12,7 @@ const {
  */
 
 /** @param {{ _id: string, id?: undefined } | { _id?: undefined, id: string }} d */
-function getID (d) {
+function getID(d) {
   return d._id ?? d.id;
 }
 

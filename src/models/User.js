@@ -29,7 +29,6 @@ const { Types } = mongoose.Schema;
  * @prop {number} role - Deprecated, do not use
  * @prop {number} level - Deprecated, do not use
  * @prop {boolean} exiled - Deprecated, do not use
- *
  * @typedef {mongoose.Document<LeanUser["_id"], {}, LeanUser> & LeanUser} User
  */
 

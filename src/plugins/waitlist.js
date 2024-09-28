@@ -18,7 +18,6 @@ const schema = JSON.parse(
 /**
  * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('../schema.js').User} User
- *
  * @typedef {{ cycle: boolean, locked: boolean }} WaitlistSettings
  */
 

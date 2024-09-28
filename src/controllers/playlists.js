@@ -13,6 +13,7 @@ import toPaginatedResponse from '../utils/toPaginatedResponse.js';
 
 /**
  * TODO move to a serializer?
+ *
  * @param {Pick<import('../schema').PlaylistItem, 'id' | 'artist' | 'title' | 'start' | 'end' | 'createdAt'>} playlistItem
  * @param {Pick<import('../schema').Media, 'id' | 'sourceType' | 'sourceID' | 'sourceData' | 'artist' | 'title' | 'duration' | 'thumbnail'>} media
  */
@@ -142,7 +143,6 @@ const patchableKeys = ['name', 'description'];
 /**
  * @typedef {object} UpdatePlaylistParams
  * @prop {PlaylistID} id
- *
  * @typedef {Record<string, string>} UpdatePlaylistBody
  */
 
@@ -179,7 +179,6 @@ async function updatePlaylist(req) {
 /**
  * @typedef {object} RenamePlaylistParams
  * @prop {PlaylistID} id
- *
  * @typedef {object} RenamePlaylistBody
  * @prop {string} name
  */
@@ -236,7 +235,6 @@ async function activatePlaylist(req) {
 /**
  * @typedef {object} GetPlaylistItemsParams
  * @prop {PlaylistID} id
- *
  * @typedef {import('../types.js').PaginationQuery & { filter?: string }} GetPlaylistItemsQuery
  */
 
@@ -268,18 +266,14 @@ async function getPlaylistItems(req) {
 
 /**
  * @typedef {import('../plugins/playlists.js').PlaylistItemDesc} PlaylistItemDesc
- *
  * @typedef {object} AddPlaylistItemsParams
  * @prop {PlaylistID} id
- *
  * @typedef {object} AtPosition
  * @prop {'start'|'end'} at
  * @prop {undefined} after
- *
  * @typedef {object} AfterPosition
  * @prop {undefined} at
  * @prop {PlaylistItemID|-1} after
- *
  * @typedef {{ items: PlaylistItemDesc[] } & (AtPosition | AfterPosition)} AddPlaylistItemsBody
  */
 
@@ -329,7 +323,6 @@ async function addPlaylistItems(req) {
 /**
  * @typedef {object} RemovePlaylistItemsParams
  * @prop {PlaylistID} id
- *
  * @typedef {object} RemovePlaylistItemsBody
  * @prop {PlaylistItemID[]} items
  */
@@ -361,7 +354,6 @@ async function removePlaylistItems(req) {
 /**
  * @typedef {object} MovePlaylistItemsParams
  * @prop {PlaylistID} id
- *
  * @typedef {{ items: PlaylistItemID[] } & (AtPosition | AfterPosition)} MovePlaylistItemsBody
  */
 
@@ -447,7 +439,6 @@ async function getPlaylistItem(req) {
  * @typedef {object} UpdatePlaylistItemParams
  * @prop {PlaylistID} id
  * @prop {PlaylistItemID} itemID
- *
  * @typedef {object} UpdatePlaylistItemBody
  * @prop {string} [artist]
  * @prop {string} [title]

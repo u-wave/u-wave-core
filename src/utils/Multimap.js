@@ -6,15 +6,15 @@
  */
 export default class Multimap {
   /** @type {Map<K, T[]>} */
-  #map = new Map()
+  #map = new Map();
 
   /**
    * Return true if the given key exists in the map.
    *
    * @param {K} key
    */
-  has (key) {
-    return this.#map.has(key)
+  has(key) {
+    return this.#map.has(key);
   }
 
   /**
@@ -22,8 +22,8 @@ export default class Multimap {
    *
    * @param {K} key
    */
-  get (key) {
-    return this.#map.get(key)
+  get(key) {
+    return this.#map.get(key);
   }
 
   /**
@@ -32,14 +32,14 @@ export default class Multimap {
    * @param {K} key
    * @param {T} value
    */
-  set (key, value) {
-    const existing = this.#map.get(key)
+  set(key, value) {
+    const existing = this.#map.get(key);
     if (existing) {
-      existing.push(value)
+      existing.push(value);
     } else {
-      this.#map.set(key, [value])
+      this.#map.set(key, [value]);
     }
-    return this
+    return this;
   }
 
   /**
@@ -47,8 +47,8 @@ export default class Multimap {
    *
    * @param {K} key
    */
-  delete (key) {
-    return this.#map.delete(key)
+  delete(key) {
+    return this.#map.delete(key);
   }
 
   /**
@@ -57,32 +57,32 @@ export default class Multimap {
    * @param {K} key
    * @param {T} value
    */
-  remove (key, value) {
-    const existing = this.#map.get(key)
+  remove(key, value) {
+    const existing = this.#map.get(key);
     if (!existing) {
-      return false
+      return false;
     }
 
     // If this is the only element for the key, delete the whole key, so
     // we never have empty keys.
     if (existing.length === 1 && existing[0] === value) {
-      return this.#map.delete(key)
+      return this.#map.delete(key);
     }
 
-    const index = existing.indexOf(value)
+    const index = existing.indexOf(value);
     if (index === -1) {
-      return false
+      return false;
     }
-    existing.splice(index, 1)
-    return true
+    existing.splice(index, 1);
+    return true;
   }
 
   /** Iterate over the keys in the map. */
-  keys () {
-    return this.#map.keys()
+  keys() {
+    return this.#map.keys();
   }
 
-  [Symbol.iterator] () {
-    return this.#map.entries()
+  [Symbol.iterator]() {
+    return this.#map.entries();
   }
 }

@@ -12,7 +12,6 @@ const { Types } = mongoose.Schema;
  * @prop {string} [hash]
  * @prop {string} [id]
  * @prop {string} [avatar]
- *
  * @typedef {mongoose.Document<LeanAuthentication["_id"], {}, LeanAuthentication> &
  *           LeanAuthentication} Authentication
  */

@@ -8,7 +8,6 @@ import toItemResponse from '../utils/toItemResponse.js';
 /**
  * @typedef {object} MuteUserParams
  * @prop {UserID} id
- *
  * @typedef {object} MuteUserBody
  * @prop {number} time
  */

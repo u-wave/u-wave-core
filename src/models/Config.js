@@ -5,7 +5,6 @@ const { Schema } = mongoose;
 /**
  * @typedef {object} LeanConfig
  * @prop {string} _id
- *
  * @typedef {mongoose.Document<LeanConfig["_id"], {}, LeanConfig> &
  *           LeanConfig} Config
  */

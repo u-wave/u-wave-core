@@ -15,7 +15,7 @@ import { sql } from 'kysely';
  * }>}
  */
 export function jsonEach(expr) {
-  return sql`json_each(${expr})`
+  return sql`json_each(${expr})`;
 }
 
 /**
@@ -24,7 +24,7 @@ export function jsonEach(expr) {
  * @returns {import('kysely').RawBuilder<number>}
  */
 export function jsonLength(expr) {
-  return sql`json_array_length(${expr})`
+  return sql`json_array_length(${expr})`;
 }
 
 /**
@@ -68,7 +68,7 @@ export function arrayCycle(expr) {
         (${expr})->>0
       )
     END)
-  `
+  `;
 }
 
 /**

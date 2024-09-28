@@ -14,7 +14,6 @@ const { Schema } = mongoose;
  * @prop {string} thumbnail
  * @prop {Date} createdAt
  * @prop {Date} updatedAt
- *
  * @typedef {mongoose.Document<LeanMedia["_id"], {}, LeanMedia> & LeanMedia} Media
  */
 

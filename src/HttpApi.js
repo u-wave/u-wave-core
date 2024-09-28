@@ -64,7 +64,6 @@ function defaultCreatePasswordResetEmail({ token, requestUrl }) {
  * @prop {import('nodemailer').Transport} [mailTransport]
  * @prop {(options: { token: string, requestUrl: string }) =>
  *   import('nodemailer').SendMailOptions} [createPasswordResetEmail]
- *
  * @typedef {object} HttpApiSettings - Runtime options for the HTTP API.
  * @prop {string[]} allowedOrigins
  */

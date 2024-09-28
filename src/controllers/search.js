@@ -56,11 +56,10 @@ function updateSourceData(uw, updates) {
 /**
  * @typedef {object} SearchParams
  * @prop {string} source
- *
  * @typedef {object} SearchQuery
  * @prop {string} query
  * @prop {string} [include]
-*/
+ */
 
 /**
  * @type {import('../types.js').AuthenticatedController<SearchParams, SearchQuery, never>}

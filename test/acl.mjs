@@ -70,8 +70,8 @@ describe('ACL', () => {
         .expect(200);
 
       sinon.assert.match(res.body.data, {
-        'testRole': ['test.perm'],
-        'testRole2': ['test.permission', 'test.permission2'],
+        testRole: ['test.perm'],
+        testRole2: ['test.permission', 'test.permission2'],
       });
     });
   });

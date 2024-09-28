@@ -12,7 +12,6 @@ const { Types } = mongoose.Schema;
  * @prop {import('mongodb').ObjectId[]} media
  * @prop {Date} createdAt
  * @prop {Date} updatedAt
- *
  * @typedef {mongoose.Document<LeanPlaylist["_id"], {}, LeanPlaylist> & LeanPlaylist & {
  *  readonly size: number
  * }} Playlist

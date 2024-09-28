@@ -148,13 +148,10 @@ class UsersRepository {
    * @typedef {object} LocalLoginOptions
    * @prop {string} email
    * @prop {string} password
-   *
    * @typedef {object} SocialLoginOptions
    * @prop {import('passport').Profile} profile
-   *
    * @typedef {LocalLoginOptions & { type: 'local' }} DiscriminatedLocalLoginOptions
    * @typedef {SocialLoginOptions & { type: string }} DiscriminatedSocialLoginOptions
-   *
    * @param {DiscriminatedLocalLoginOptions | DiscriminatedSocialLoginOptions} options
    * @returns {Promise<User>}
    */
@@ -222,7 +219,6 @@ class UsersRepository {
    * @prop {string} id
    * @prop {string} username
    * @prop {string} [avatar]
-   *
    * @param {FindOrCreateSocialUserOptions} options
    * @returns {Promise<User>}
    */

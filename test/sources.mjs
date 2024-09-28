@@ -79,8 +79,12 @@ describe('Media Sources', () => {
     uw.source(testSource);
     const results = await uw.source('test-source').get(null, ['one', 'two']);
     assert.deepStrictEqual(results, [
-      { sourceType: 'test-source', sourceID: 'one', artist: 'artist one', title: 'title one', thumbnail: 'https://placedog.net/280' },
-      { sourceType: 'test-source', sourceID: 'two', artist: 'artist two', title: 'title two', thumbnail: 'https://placedog.net/280' },
+      {
+        sourceType: 'test-source', sourceID: 'one', artist: 'artist one', title: 'title one', thumbnail: 'https://placedog.net/280',
+      },
+      {
+        sourceType: 'test-source', sourceID: 'two', artist: 'artist two', title: 'title two', thumbnail: 'https://placedog.net/280',
+      },
     ]);
   });
 

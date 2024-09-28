@@ -16,7 +16,6 @@ async function list(req) {
 /**
  * @typedef {object} CreateRoleParams
  * @prop {string} name
- *
  * @typedef {object} CreateRoleBody
  * @prop {string[]} permissions
  */

@@ -360,7 +360,6 @@ class Booth {
    * @prop {boolean} [remove]
    * @prop {boolean} [publish]
    * @prop {import('redlock').RedlockAbortSignal} [signal]
-   *
    * @param {AdvanceOptions} [opts]
    * @returns {Promise<{
    *   historyEntry: HistoryEntry,
@@ -370,7 +369,7 @@ class Booth {
    * }|null>}
    */
   async #advanceLocked(opts = {}, tx = this.#uw.db) {
-    const { playlists } = this.#uw
+    const { playlists } = this.#uw;
 
     const publish = opts.publish ?? true;
     const remove = opts.remove || (

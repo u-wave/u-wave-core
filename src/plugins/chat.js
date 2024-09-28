@@ -4,7 +4,6 @@ import routes from '../routes/chat.js';
 /**
  * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('../schema.js').User} User
- *
  * @typedef {object} ChatOptions
  * @prop {number} maxLength
  */
@@ -68,7 +67,6 @@ class Chat {
 
   /**
    * @param {User} user
-   *
    * @private
    */
   isMuted(user) {
@@ -77,7 +75,6 @@ class Chat {
 
   /**
    * @param {string} message
-   *
    * @private
    */
   truncate(message) {

@@ -139,7 +139,7 @@ class Bans {
 
     const expiresAt = permanent
       ? null
-      : new Date(Math.floor(Date.now() / 1000) * 1000 + duration)
+      : new Date(Math.floor(Date.now() / 1000) * 1000 + duration);
     const ban = {
       userID: user.id,
       moderatorID: moderator.id,

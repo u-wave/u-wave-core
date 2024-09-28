@@ -12,7 +12,6 @@ const schema = JSON.parse(
 /**
  * @typedef {import('../schema.js').UserID} UserID
  * @typedef {import('../schema.js').User} User
- *
  * @typedef {{
  *   callbackURL?: string,
  * } & ({
@@ -22,7 +21,6 @@ const schema = JSON.parse(
  *   clientID: string,
  *   clientSecret: string,
  * })} GoogleOptions
- *
  * @typedef {object} SocialAuthSettings
  * @prop {GoogleOptions} google
  */
