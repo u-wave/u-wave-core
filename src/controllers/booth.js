@@ -297,29 +297,37 @@ async function vote(req) {
 async function favorite(req) {
   const { user } = req;
   const { playlistID, historyID } = req.body;
+  const { history, playlists } = req.uwave;
   const uw = req.uwave;
-  const { PlaylistItem, HistoryEntry } = uw.models;
 
-  const historyEntry = await HistoryEntry.findById(historyID);
+  const historyEntry = await history.getEntry(historyID);
 
   if (!historyEntry) {
     throw new HistoryEntryNotFoundError({ id: historyID });
   }
-  if (`${historyEntry.user}` === user.id) {
+  if (historyEntry.user._id === user.id) {
     throw new CannotSelfFavoriteError();
   }
 
-  const playlist = await uw.playlists.getUserPlaylist(user, playlistID);
+  const playlist = await playlists.getUserPlaylist(user, playlistID);
   if (!playlist) {
     throw new PlaylistNotFoundError({ id: playlistID });
   }
 
   // `.media` has the same shape as `.item`, but is guaranteed to exist and have
   // the same properties as when the playlist item was actually played.
-  const itemProps = historyEntry.media.toJSON();
-  const playlistItem = await PlaylistItem.create(itemProps);
-
-  playlist.media.push(playlistItem.id);
+  const result = await playlists.addPlaylistItems(
+    playlist,
+    [{
+      sourceType: historyEntry.media.media.sourceType,
+      sourceID: historyEntry.media.media.sourceID,
+      artist: historyEntry.media.artist,
+      title: historyEntry.media.title,
+      start: historyEntry.media.start,
+      end: historyEntry.media.end,
+    }],
+    { at: 'end' },
+  );
 
   await uw.redis.sadd('booth:favorites', user.id);
   uw.publish('booth:favorite', {
@@ -327,11 +335,9 @@ async function favorite(req) {
     playlistID,
   });
 
-  await playlist.save();
-
-  return toListResponse([playlistItem], {
+  return toListResponse(result.added, {
     meta: {
-      playlistSize: playlist.media.length,
+      playlistSize: result.playlistSize,
     },
     included: {
       media: ['media'],
