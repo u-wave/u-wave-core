@@ -515,7 +515,7 @@ class Booth {
   async setRemoveAfterCurrentPlay(user, remove) {
     const newValue = await this.#uw.redis['uw:removeAfterCurrentPlay'](
       ...REMOVE_AFTER_CURRENT_PLAY_SCRIPT.keys,
-      user._id.toString(),
+      user.id,
       remove,
     );
     return newValue === 1;

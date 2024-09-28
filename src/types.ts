@@ -6,7 +6,7 @@ import type { JsonObject } from 'type-fest';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import type UwaveServer from './Uwave.js';
 import type { HttpApi } from './HttpApi.js';
-import type { User as UwaveUser } from './schema.js';
+import type { UserID, User as UwaveUser } from './schema.js';
 import type { AuthenticateOptions } from './controllers/authenticate.js';
 
 // Add üWave specific request properties.
@@ -33,11 +33,11 @@ declare global {
 declare module 'ioredis' {
   interface Redis {
     /** Run the add-to-waitlist script, declared in src/plugins/waitlist.js. */
-    'uw:addToWaitlist'(...args: [...keys: string[], userId: string]): Promise<string[]>;
+    'uw:addToWaitlist'(...args: [...keys: string[], userId: UserID]): Promise<string[]>;
     /** Run the move-waitlist script, declared in src/plugins/waitlist.js. */
-    'uw:moveWaitlist'(...args: [...keys: string[], userId: string, position: number]): Promise<string[]>;
+    'uw:moveWaitlist'(...args: [...keys: string[], userId: UserID, position: number]): Promise<string[]>;
     /** Run the remove-after-current-play script, declared in src/plugins/booth.js. */
-    'uw:removeAfterCurrentPlay'(...args: [...keys: string[], userId: string, remove: boolean]): Promise<0 | 1>;
+    'uw:removeAfterCurrentPlay'(...args: [...keys: string[], userId: UserID, remove: boolean]): Promise<0 | 1>;
   }
 }
 

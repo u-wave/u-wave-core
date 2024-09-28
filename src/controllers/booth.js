@@ -123,7 +123,7 @@ async function skipBooth(req) {
   }
 
   if (!await acl.isAllowed(user, Permissions.SkipOther)) {
-    throw new PermissionError({ requiredRole: 'booth.skip.other' });
+    throw new PermissionError({ requiredRole: Permissions.SkipOther });
   }
 
   // @ts-expect-error TS2345 pretending like `userID` is definitely defined here
@@ -133,7 +133,7 @@ async function skipBooth(req) {
   return toItemResponse({});
 }
 
-/** @typedef {{ userID: string, autoLeave: boolean }} LeaveBoothBody */
+/** @typedef {{ userID: UserID, autoLeave: boolean }} LeaveBoothBody */
 
 /**
  * @type {import('../types.js').AuthenticatedController<{}, {}, LeaveBoothBody>}
@@ -150,8 +150,8 @@ async function leaveBooth(req) {
     return toItemResponse({ autoLeave: value });
   }
 
-  if (!await acl.isAllowed(self, 'booth.skip.other')) {
-    throw new PermissionError({ requiredRole: 'booth.skip.other' });
+  if (!await acl.isAllowed(self, Permissions.SkipOther)) {
+    throw new PermissionError({ requiredRole: Permissions.SkipOther });
   }
 
   const user = await users.getUser(userID);
