@@ -58,10 +58,9 @@ async function getBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @returns {Promise<UserID|null>}
  */
 function getCurrentDJ(uw) {
-  return uw.redis.get('booth:currentDJ');
+  return /** @type {Promise<UserID|null>} */ (uw.redis.get('booth:currentDJ'));
 }
 
 /**
@@ -359,7 +358,9 @@ async function getHistory(req) {
     filter['media.media'] = req.query.filter.media;
   }
 
-  const roomHistory = await history.getHistory(filter, pagination);
+  // TODO: Support filter?
+
+  const roomHistory = await history.getRoomHistory(pagination);
 
   return toPaginatedResponse(roomHistory, {
     baseUrl: req.fullUrl,

@@ -153,10 +153,12 @@ class Acl {
       .returningAll()
       .execute();
 
-    this.#uw.publish('acl:disallow', {
-      userID: user.id,
-      roles: deletedRoles.map((row) => row.role),
-    });
+    if (deletedRoles.length > 0) {
+      this.#uw.publish('acl:disallow', {
+        userID: user.id,
+        roles: deletedRoles.map((row) => row.role),
+      });
+    }
   }
 
   /**

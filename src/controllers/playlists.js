@@ -13,8 +13,8 @@ import toPaginatedResponse from '../utils/toPaginatedResponse.js';
 
 /**
  * TODO move to a serializer?
- * @param {import('../schema').PlaylistItem} playlistItem
- * @param {import('../schema').Media} media
+ * @param {Pick<import('../schema').PlaylistItem, 'id' | 'artist' | 'title' | 'start' | 'end' | 'createdAt'>} playlistItem
+ * @param {Pick<import('../schema').Media, 'id' | 'sourceType' | 'sourceID' | 'sourceData' | 'artist' | 'title' | 'duration' | 'thumbnail'>} media
  */
 export function legacyPlaylistItem(playlistItem, media) {
   return {

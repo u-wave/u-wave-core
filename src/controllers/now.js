@@ -8,11 +8,11 @@ import { legacyPlaylistItem } from './playlists.js';
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {import('../schema.js').Playlist} playlist
+ * @param {import('../schema.js').Playlist & { size: number }} playlist
  */
 async function getFirstItem(uw, playlist) {
   try {
-    if (playlist && playlist.size > 0) {
+    if (playlist.size > 0) {
       const { playlistItem, media } = await uw.playlists.getPlaylistItemAt(playlist, 0);
       return legacyPlaylistItem(playlistItem, media);
     }

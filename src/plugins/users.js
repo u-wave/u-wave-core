@@ -299,7 +299,6 @@ class UsersRepository {
 
   /**
    * @param {{ username: string, email: string, password: string }} props
-   * @returns {Promise<User>}
    */
   async createUser({
     username, email, password,

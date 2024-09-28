@@ -51,7 +51,7 @@ export type Request<
   TQuery = DefaultQuery,
   TBody = DefaultBody,
 > = ExpressRequest<TParams, unknown, TBody, TQuery, never> & {
-  user?: UwaveUser,
+  user?: UwaveUser & { roles: string[] },
 };
 
 /**
@@ -71,7 +71,7 @@ export type AuthenticatedRequest<
   TQuery = DefaultQuery,
   TBody = DefaultBody,
 > = Request<TParams, TQuery, TBody> & {
-  user: UwaveUser,
+  user: UwaveUser & { roles: string[] },
 };
 
 /**
