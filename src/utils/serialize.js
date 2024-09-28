@@ -81,9 +81,9 @@ export function serializeUser(model) {
     slug: model.slug,
     roles: model.roles,
     avatar: model.avatar,
-    activePlaylist: model.activePlaylistID,
-    createdAt: model.createdAt.toISOString(),
-    updatedAt: model.updatedAt?.toISOString(),
+    activePlaylist: model.activePlaylistID ?? null,
+    createdAt: model.createdAt.toISOString() ?? null,
+    updatedAt: model.updatedAt?.toISOString() ?? null,
     // lastSeenAt: model.lastSeenAt?.toISOString(),
   };
 }
