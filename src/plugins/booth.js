@@ -13,7 +13,7 @@ import { jsonb } from '../utils/sqlite.js';
  * @typedef {import('../schema.js').Playlist} Playlist
  * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
  * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
- * @typedef {import('../schema.js').Media} Media
+ * @typedef {Omit<import('../schema.js').Media, 'createdAt' | 'updatedAt'>} Media
  */
 
 class Booth {
@@ -305,19 +305,23 @@ class Booth {
   }
 
   /**
-   * @param {{ user: User, playlist: Playlist, media: Media, historyEntry: HistoryEntry }} next
+   * @param {{
+   *   user: User,
+   *   playlist: Playlist,
+   *   media: Media,
+   *   historyEntry: HistoryEntry
+   * } | null} next
    */
   async #publishAdvanceComplete(next) {
     const { waitlist } = this.#uw;
 
-    if (next) {
+    if (next != null) {
       this.#uw.publish('advance:complete', {
         historyID: next.historyEntry.id,
         userID: next.user.id,
         playlistID: next.playlist.id,
         media: this.getMediaForPlayback(next),
-        // TODO
-        // playedAt: next.historyEntry.createdAt.getTime(),
+        playedAt: next.historyEntry.createdAt.getTime(),
       });
       this.#uw.publish('playlist:cycle', {
         userID: next.user.id,
@@ -359,9 +363,10 @@ class Booth {
    *
    * @param {AdvanceOptions} [opts]
    * @returns {Promise<{
-   *   user: User,
    *   historyEntry: HistoryEntry,
+   *   user: User,
    *   media: Media,
+   *   playlist: Playlist,
    * }|null>}
    */
   async #advanceLocked(opts = {}, tx = this.#uw.db) {
@@ -402,7 +407,8 @@ class Booth {
       }, 'previous track stats');
     }
 
-    if (next) {
+    let result = null;
+    if (next != null) {
       this.#logger.info({
         id: next.playlistItem.id,
         artist: next.playlistItem.artist,
@@ -412,7 +418,8 @@ class Booth {
       if (sourceData) {
         next.historyEntry.sourceData = sourceData;
       }
-      await tx.insertInto('historyEntries')
+      const historyEntry = await tx.insertInto('historyEntries')
+        .returningAll()
         .values({
           id: next.historyEntry.id,
           userID: next.user.id,
@@ -421,9 +428,16 @@ class Booth {
           title: next.historyEntry.title,
           start: next.historyEntry.start,
           end: next.historyEntry.end,
-          sourceData: next.historyEntry.sourceData != null ? jsonb(next.historyEntry.sourceData) : null,
+          sourceData: sourceData != null ? jsonb(sourceData) : null,
         })
-        .execute();
+        .executeTakeFirstOrThrow();
+
+      result = {
+        historyEntry,
+        playlist: next.playlist,
+        user: next.user,
+        media: next.media,
+      };
     } else {
       this.#maybeStop();
     }
@@ -439,10 +453,10 @@ class Booth {
     }
 
     if (publish !== false) {
-      await this.#publishAdvanceComplete(next);
+      await this.#publishAdvanceComplete(result);
     }
 
-    return next;
+    return result;
   }
 
   /**

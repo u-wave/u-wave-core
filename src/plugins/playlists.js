@@ -674,7 +674,7 @@ class PlaylistsRepository {
   }
 
   /**
-   * @param {PlaylistItem} item
+   * @param {Omit<PlaylistItem, 'playlistID'>} item
    * @param {Partial<Pick<PlaylistItem, 'artist' | 'title' | 'start' | 'end'>>} patch
    * @returns {Promise<PlaylistItem>}
    */
