@@ -76,6 +76,7 @@ async function getState(req) {
   const booth = getBoothData(uw);
   const waitlist = uw.waitlist.getUserIDs();
   const waitlistLocked = uw.waitlist.isLocked();
+  const autoLeave = user != null ? uw.booth.getRemoveAfterCurrentPlay(user) : false;
   let activePlaylist = user?.activePlaylist
     ? uw.playlists.getUserPlaylist(user, user.activePlaylist)
     : null;
@@ -110,6 +111,7 @@ async function getState(req) {
     booth,
     waitlist,
     waitlistLocked,
+    autoLeave,
     activePlaylist,
     firstActivePlaylistItem,
     playlists,
