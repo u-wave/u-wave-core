@@ -60,6 +60,15 @@ export interface BanTable {
   updatedAt: Generated<Date>,
 }
 
+export type Mute = Selected<MuteTable>;
+export interface MuteTable {
+  userID: UserID,
+  moderatorID: UserID,
+  expiresAt: Date,
+  createdAt: Generated<Date>,
+  updatedAt: Generated<Date>,
+}
+
 export type AuthService = Selected<AuthServiceTable>;
 export interface AuthServiceTable {
   userID: UserID,
@@ -137,6 +146,7 @@ export interface Database {
   userRoles: UserRoleTable,
   roles: RoleTable,
   bans: BanTable,
+  mutes: MuteTable,
   authServices: AuthServiceTable,
   playlists: PlaylistTable,
   playlistItems: PlaylistItemTable,

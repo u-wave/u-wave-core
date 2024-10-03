@@ -63,6 +63,14 @@ async function up({ context: uw }) {
     .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
 
+  await db.schema.createTable('mutes')
+    .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('moderator_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('expires_at', 'timestamp', (col) => col.notNull())
+    .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .addColumn('updated_at', 'timestamp', (col) => col.notNull().defaultTo(now))
+    .execute();
+
   await db.schema.createTable('auth_services')
     .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
     .addColumn('service', 'text', (col) => col.notNull())
