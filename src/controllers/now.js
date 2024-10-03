@@ -121,6 +121,13 @@ async function getState(req) {
     state.playlists = state.playlists.map(serializePlaylist);
   }
 
+  for (const permission of Object.values(state.roles).flat()) {
+    // Web client expects all permissions to be roles too.
+    // This isn't how it works since #637.
+    // Clients can still distinguish between roles and permissions using `.includes('.')`
+    state.roles[permission] ??= [];
+  }
+
   return state;
 }
 
