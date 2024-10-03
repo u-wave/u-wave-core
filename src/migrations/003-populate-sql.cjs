@@ -1,6 +1,7 @@
 'use strict';
 
 const { randomUUID } = require('node:crypto');
+const mongoose = require('mongoose');
 const { sql } = require('kysely');
 
 /** @param {unknown} value */
@@ -12,7 +13,24 @@ function jsonb(value) {
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
  */
 async function up({ context: uw }) {
-  const { db, models } = uw;
+  const { db } = uw;
+
+  const mongo = await mongoose.connect(uw.options.mongo).catch(() => null);
+  if (mongo == null) {
+    return;
+  }
+
+  const models = {
+    AclRole: mongo.model('AclRole', await import('../models/AclRole.js').then((m) => m.default)),
+    Authentication: mongo.model('Authentication', await import('../models/Authentication.js').then((m) => m.default)),
+    Config: mongo.model('Config', await import('../models/Config.js').then((m) => m.default)),
+    HistoryEntry: mongo.model('History', await import('../models/History.js').then((m) => m.default)),
+    Media: mongo.model('Media', await import('../models/Media.js').then((m) => m.default)),
+    Migration: mongo.model('Migration', await import('../models/Migration.js').then((m) => m.default)),
+    Playlist: mongo.model('Playlist', await import('../models/Playlist.js').then((m) => m.default)),
+    PlaylistItem: mongo.model('PlaylistItem', await import('../models/PlaylistItem.js').then((m) => m.default)),
+    User: mongo.model('User', await import('../models/User.js').then((m) => m.default)),
+  };
 
   /** @type {Map<string, string>} */
   const idMap = new Map();
@@ -170,7 +188,8 @@ async function up({ context: uw }) {
         })
         .execute();
     }
-  });
+  })
+  .finally(() => mongo.disconnect());
 }
 
 /**

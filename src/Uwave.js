@@ -1,6 +1,5 @@
 import EventEmitter from 'node:events';
 import { promisify } from 'node:util';
-import mongoose from 'mongoose';
 import Redis from 'ioredis';
 import avvio from 'avvio';
 import { pino } from 'pino';
@@ -11,7 +10,6 @@ import httpApi, { errorHandling } from './HttpApi.js';
 import SocketServer from './SocketServer.js';
 import { Source } from './Source.js';
 import { i18n } from './locale.js';
-import models from './models/index.js';
 import configStore from './plugins/configStore.js';
 import booth from './plugins/booth.js';
 import chat from './plugins/chat.js';
@@ -151,10 +149,6 @@ class UwaveServer extends EventEmitter {
   // @ts-expect-error TS2564 Definitely assigned in a plugin
   express;
 
-  /** @type {import('./models/index.js').Models} */
-  // @ts-expect-error TS2564 Definitely assigned in a plugin
-  models;
-
   /** @type {import('./plugins/acl.js').Acl} */
   // @ts-expect-error TS2564 Definitely assigned in a plugin
   acl;
@@ -219,9 +213,6 @@ class UwaveServer extends EventEmitter {
    */
   #sources = new Map();
 
-  /** @type {import('pino').Logger} */
-  #mongoLogger;
-
   /**
    * @param {Options} options
    */
@@ -274,8 +265,6 @@ class UwaveServer extends EventEmitter {
         new SqliteDateColumnsPlugin(['createdAt', 'updatedAt', 'expiresAt', 'playedAt', 'lastSeenAt']),
       ],
     });
-    this.mongo = mongoose.createConnection(this.options.mongo);
-    // mongoose.set('debug', true);
 
     if (typeof options.redis === 'string') {
       this.redis = new Redis(options.redis, { lazyConnect: true });
@@ -283,23 +272,12 @@ class UwaveServer extends EventEmitter {
       this.redis = new Redis({ ...options.redis, lazyConnect: true });
     }
 
-    this.#mongoLogger = this.logger.child({ ns: 'uwave:mongo' });
-
     this.configureRedis();
-    this.configureMongoose();
 
     boot.onClose(() => Promise.all([
       this.redis.quit(),
-      this.mongo.close(),
     ]));
 
-    // Wait for the connections to be set up.
-    boot.use(async () => {
-      this.#mongoLogger.debug('waiting for mongodb...');
-      await this.mongo.asPromise();
-    });
-
-    boot.use(models);
     boot.use(migrations);
     boot.use(configStore);
 
@@ -401,31 +379,6 @@ class UwaveServer extends EventEmitter {
     this.redis.on('connect', () => {
       log.info('connected');
       this.emit('redisConnect');
-    });
-  }
-
-  /**
-   * @private
-   */
-  configureMongoose() {
-    this.mongo.on('error', (error) => {
-      this.#mongoLogger.error(error);
-      this.emit('mongoError', error);
-    });
-
-    this.mongo.on('reconnected', () => {
-      this.#mongoLogger.info('reconnected');
-      this.emit('mongoReconnect');
-    });
-
-    this.mongo.on('disconnected', () => {
-      this.#mongoLogger.info('disconnected');
-      this.emit('mongoDisconnect');
-    });
-
-    this.mongo.on('connected', () => {
-      this.#mongoLogger.info('connected');
-      this.emit('mongoConnect');
     });
   }
 
