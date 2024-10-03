@@ -203,14 +203,14 @@ async function up({ context: uw }) {
           historyEntryID: entryID,
           userID: idMap.get(id.toString()),
           vote: 1,
-        })
+        });
       }
       for (const id of entry.downvotes) {
         feedback.set(id.toString(), {
           historyEntryID: entryID,
           userID: idMap.get(id.toString()),
           vote: -1,
-        })
+        });
       }
       for (const id of entry.favorites) {
         const entry = feedback.get(id.toString());
@@ -232,7 +232,7 @@ async function up({ context: uw }) {
       }
     }
   })
-  .finally(() => mongo.disconnect());
+    .finally(() => mongo.disconnect());
 }
 
 /**
