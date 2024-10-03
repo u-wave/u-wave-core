@@ -130,7 +130,7 @@
   "scripts": {
     "lint": "eslint --cache .",
     "test": "npm run tests-only && npm run lint",
-    "tests-only": "c8 --reporter lcov --src src mocha --exit",
+    "tests-only": "c8 --reporter lcov --src src mocha",
     "types": "tsc -p tsconfig.json",
     "start": "nodemon dev/u-wave-dev-server.js | pino-colada"
   }

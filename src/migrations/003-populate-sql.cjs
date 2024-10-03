@@ -15,6 +15,10 @@ function jsonb(value) {
 async function up({ context: uw }) {
   const { db } = uw;
 
+  if (uw.options.mongo == null) {
+    return;
+  }
+
   const mongo = await mongoose.connect(uw.options.mongo).catch(() => null);
   if (mongo == null) {
     return;

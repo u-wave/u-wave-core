@@ -4,10 +4,7 @@ import { spawn } from 'child_process';
 import getPort from 'get-port';
 import Redis from 'ioredis';
 import uwave from 'u-wave-core';
-import deleteDatabase from './deleteDatabase.mjs';
 import testPlugin from './plugin.mjs';
-
-const DB_HOST = process.env.MONGODB_HOST ?? 'localhost';
 
 /**
  * Create a separate in-memory redis instance to run tests against.
@@ -64,7 +61,6 @@ async function createUwave(name, options) {
   const redisServer = process.env.REDIS_URL
     ? createRedisConnection()
     : await createIsolatedRedis();
-  const mongoUrl = `mongodb://${DB_HOST}/uw_test_${name}`;
 
   const port = await getPort();
 
@@ -73,7 +69,7 @@ async function createUwave(name, options) {
     port,
     redis: redisServer.url,
     sqlite: ':memory:',
-    mongo: mongoUrl,
+    mongo: null,
     secret: Buffer.from(`secret_${name}`),
   });
 
@@ -84,7 +80,6 @@ async function createUwave(name, options) {
       await uw.close();
     } finally {
       await redisServer.close();
-      await deleteDatabase(mongoUrl);
     }
   };
 
