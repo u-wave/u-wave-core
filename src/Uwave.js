@@ -3,9 +3,7 @@ import { promisify } from 'node:util';
 import Redis from 'ioredis';
 import avvio from 'avvio';
 import { pino } from 'pino';
-import {
-  CamelCasePlugin, Kysely, OperationNodeTransformer, PostgresDialect, SqliteDialect,
-} from 'kysely';
+import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely';
 import httpApi, { errorHandling } from './HttpApi.js';
 import SocketServer from './SocketServer.js';
 import { Source } from './Source.js';
@@ -22,7 +20,7 @@ import acl from './plugins/acl.js';
 import waitlist from './plugins/waitlist.js';
 import passport from './plugins/passport.js';
 import migrations from './plugins/migrations.js';
-import lodash from 'lodash';
+import { SqliteDateColumnsPlugin, connect as connectSqlite } from './utils/sqlite.js';
 
 const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
@@ -35,86 +33,6 @@ class UwCamelCasePlugin extends CamelCasePlugin {
    */
   camelCase(str) {
     return super.camelCase(str).replace(/Id$/, 'ID');
-  }
-}
-
-class SqliteDateColumnsPlugin {
-  /** @param {string[]} dateColumns */
-  constructor(dateColumns) {
-    this.dateColumns = new Set(dateColumns);
-    this.transformer = new class extends OperationNodeTransformer {
-      /** @param {import('kysely').ValueNode} node */
-      transformValue(node) {
-        if (node.value instanceof Date) {
-          return { ...node, value: node.value.toISOString() };
-        }
-        return node;
-      }
-
-      /** @param {import('kysely').PrimitiveValueListNode} node */
-      transformPrimitiveValueList(node) {
-        return {
-          ...node,
-          values: node.values.map((value) => {
-            if (value instanceof Date) {
-              return value.toISOString();
-            }
-            return value;
-          }),
-        };
-      }
-
-      /** @param {import('kysely').ColumnUpdateNode} node */
-      transformColumnUpdate(node) {
-        /**
-         * @param {import('kysely').OperationNode} node
-         * @returns {node is import('kysely').ValueNode}
-         */
-        function isValueNode(node) {
-          return node.kind === 'ValueNode';
-        }
-
-        if (isValueNode(node.value) && node.value.value instanceof Date) {
-          return super.transformColumnUpdate({
-            ...node,
-            value: /** @type {import('kysely').ValueNode} */ ({
-              ...node.value,
-              value: node.value.value.toISOString(),
-            }),
-          });
-        }
-        return super.transformColumnUpdate(node);
-      }
-    }();
-  }
-
-  /** @param {import('kysely').PluginTransformQueryArgs} args */
-  transformQuery(args) {
-    return this.transformer.transformNode(args.node);
-  }
-
-  /** @param {string} col */
-  #isDateColumn(col) {
-    if (this.dateColumns.has(col)) {
-      return true;
-    }
-    const i = col.lastIndexOf('.');
-    return i !== -1 && this.dateColumns.has(col.slice(i));
-  }
-
-  /** @param {import('kysely').PluginTransformResultArgs} args */
-  async transformResult(args) {
-    for (const row of args.result.rows) {
-      for (let col in row) {
-        if (this.#isDateColumn(col)) {
-          const value = row[col];
-          if (typeof value === 'string') {
-            row[col] = new Date(value);
-          }
-        }
-      }
-    }
-    return args.result;
   }
 }
 
@@ -236,23 +154,7 @@ class UwaveServer extends EventEmitter {
     /** @type {Kysely<import('./schema.js').Database>} */
     this.db = new Kysely({
       dialect: new SqliteDialect({
-        async database() {
-          const { default: Database } = await import('better-sqlite3');
-          const db = new Database(options.sqlite ?? 'uwave_local.sqlite');
-          db.pragma('journal_mode = WAL');
-          db.pragma('foreign_keys = ON');
-          db.function('json_array_shuffle', { directOnly: true }, (items) => {
-            if (typeof items !== 'string') {
-              throw new TypeError('json_array_shuffle(): items must be JSON string');
-            }
-            items = JSON.parse(items);
-            if (!Array.isArray(items)) {
-              throw new TypeError('json_array_shuffle(): items must be JSON array');
-            }
-            return JSON.stringify(lodash.shuffle(items));
-          });
-          return db;
-        },
+        database: () => connectSqlite(options.sqlite ?? 'uwave_local.sqlite'),
       }),
       // dialect: new PostgresDialect({
       //   pool: new pg.Pool({

@@ -1,4 +1,5 @@
-import { sql } from 'kysely';
+import lodash from 'lodash';
+import { sql, OperationNodeTransformer } from 'kysely';
 
 /**
  * @template {unknown[]} T
@@ -82,3 +83,108 @@ export function jsonGroupArray(expr) {
 
 /** @type {import('kysely').RawBuilder<Date>} */
 export const now = sql`(strftime('%FT%T', 'now'))`;
+
+/** Stringify dates before entering them in the database. */
+class SqliteDateTransformer extends OperationNodeTransformer {
+  /** @param {import('kysely').ValueNode} node */
+  transformValue(node) {
+    if (node.value instanceof Date) {
+      return { ...node, value: node.value.toISOString() };
+    }
+    return node;
+  }
+
+  /** @param {import('kysely').PrimitiveValueListNode} node */
+  transformPrimitiveValueList(node) {
+    return {
+      ...node,
+      values: node.values.map((value) => {
+        if (value instanceof Date) {
+          return value.toISOString();
+        }
+        return value;
+      }),
+    };
+  }
+
+  /** @param {import('kysely').ColumnUpdateNode} node */
+  transformColumnUpdate(node) {
+    /**
+     * @param {import('kysely').OperationNode} node
+     * @returns {node is import('kysely').ValueNode}
+     */
+    function isValueNode(node) {
+      return node.kind === 'ValueNode';
+    }
+
+    if (isValueNode(node.value) && node.value.value instanceof Date) {
+      return super.transformColumnUpdate({
+        ...node,
+        value: /** @type {import('kysely').ValueNode} */ ({
+          ...node.value,
+          value: node.value.value.toISOString(),
+        }),
+      });
+    }
+    return super.transformColumnUpdate(node);
+  }
+}
+
+export class SqliteDateColumnsPlugin {
+  /** @param {string[]} dateColumns */
+  constructor(dateColumns) {
+    this.dateColumns = new Set(dateColumns);
+    this.transformer = new SqliteDateTransformer();
+  }
+
+  /** @param {import('kysely').PluginTransformQueryArgs} args */
+  transformQuery(args) {
+    return this.transformer.transformNode(args.node);
+  }
+
+  /** @param {string} col */
+  #isDateColumn(col) {
+    if (this.dateColumns.has(col)) {
+      return true;
+    }
+    const i = col.lastIndexOf('.');
+    return i !== -1 && this.dateColumns.has(col.slice(i));
+  }
+
+  /** @param {import('kysely').PluginTransformResultArgs} args */
+  async transformResult(args) {
+    for (const row of args.result.rows) {
+      for (let col in row) {
+        if (this.#isDateColumn(col)) {
+          const value = row[col];
+          if (typeof value === 'string') {
+            row[col] = new Date(value);
+          }
+        }
+      }
+    }
+    return args.result;
+  }
+}
+
+/**
+ * @param {string} path
+ * @returns {Promise<import('better-sqlite3').Database>}
+ */
+export async function connect(path) {
+  const { default: Database } = await import('better-sqlite3');
+  const db = new Database(path ?? 'uwave_local.sqlite');
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.function('json_array_shuffle', { directOnly: true }, (items) => {
+    if (typeof items !== 'string') {
+      throw new TypeError('json_array_shuffle(): items must be JSON string');
+    }
+    items = JSON.parse(items);
+    if (!Array.isArray(items)) {
+      throw new TypeError('json_array_shuffle(): items must be JSON array');
+    }
+    return JSON.stringify(lodash.shuffle(items));
+  });
+  return db;
+}
