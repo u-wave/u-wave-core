@@ -1,4 +1,3 @@
-import assert from 'node:assert';
 import RedLock from 'redlock';
 import { EmptyPlaylistError, PlaylistItemNotFoundError } from '../errors/index.js';
 import routes from '../routes/booth.js';
@@ -117,9 +116,6 @@ class Booth {
     const entry = await db.selectFrom('historyEntries')
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
       .innerJoin('users', 'historyEntries.userID', 'users.id')
-      .leftJoin('feedback as upvotes', (join) => join.onRef('historyEntries.id', '=', 'upvotes.historyEntryID').on('vote', '=', 1))
-      .leftJoin('feedback as downvotes', (join) => join.onRef('historyEntries.id', '=', 'downvotes.historyEntryID').on('vote', '=', -1))
-      .leftJoin('feedback as favorites', (join) => join.onRef('historyEntries.id', '=', 'favorites.historyEntryID').on('favorite', '=', 1))
       .select([
         'historyEntries.id as id',
         'media.id as media.id',
@@ -139,12 +135,23 @@ class Booth {
         'historyEntries.start',
         'historyEntries.end',
         'historyEntries.createdAt',
-        (eb) => eb.fn.agg('json_group_array', ['upvotes.userID']).as('upvotes'),
-        (eb) => eb.fn.agg('json_group_array', ['downvotes.userID']).as('downvotes'),
-        (eb) => eb.fn.agg('json_group_array', ['favorites.userID']).as('favorites'),
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('vote', '=', 1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('upvotes'),
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('vote', '=', -1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('downvotes'),
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('favorite', '=', 1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('favorites'),
       ])
       .where('historyEntries.id', '=', historyID)
-      .groupBy('historyEntries.id')
       .executeTakeFirst();
 
     return entry ? {
