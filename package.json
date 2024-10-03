@@ -91,7 +91,7 @@
     "@types/jsonwebtoken": "^9.0.0",
     "@types/lodash": "^4.14.168",
     "@types/ms": "^0.7.31",
-    "@types/node": "^16.18.18",
+    "@types/node": "^18.19.54",
     "@types/node-fetch": "^2.5.8",
     "@types/nodemailer": "^6.4.1",
     "@types/object.groupby": "^1.0.3",
