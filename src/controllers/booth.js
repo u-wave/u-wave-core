@@ -20,6 +20,9 @@ import { Permissions } from '../plugins/acl.js';
  * @typedef {import('../schema').HistoryEntryID} HistoryEntryID
  */
 
+const REDIS_HISTORY_ID = 'booth:historyID';
+const REDIS_CURRENT_DJ_ID = 'booth:currentDJ';
+
 /**
  * @param {import('../Uwave.js').default} uw
  */
@@ -34,15 +37,17 @@ async function getBoothData(uw) {
   // @ts-expect-error TS2322: We just populated historyEntry.media.media
   const media = booth.getMediaForPlayback(state);
 
-  const votes = await booth.getCurrentVoteStats();
-
   return {
     historyID: state.historyEntry.id,
     // playlistID: state.playlist.id,
     playedAt: state.historyEntry.createdAt.getTime(),
     userID: state.user.id,
     media,
-    stats: votes,
+    stats: {
+      upvotes: state.upvotes,
+      downvotes: state.downvotes,
+      favorites: state.favorites,
+    },
   };
 }
 
@@ -67,7 +72,14 @@ async function getBooth(req) {
  * @param {import('../Uwave.js').default} uw
  */
 function getCurrentDJ(uw) {
-  return /** @type {Promise<UserID|null>} */ (uw.redis.get('booth:currentDJ'));
+  return /** @type {Promise<UserID|null>} */ (uw.redis.get(REDIS_CURRENT_DJ_ID));
+}
+
+/**
+ * @param {import('../Uwave.js').default} uw
+ */
+function getCurrentHistoryID(uw) {
+  return /** @type {Promise<HistoryEntryID|null>} */ (uw.redis.get(REDIS_HISTORY_ID));
 }
 
 /**
@@ -199,25 +211,19 @@ async function replaceBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
+ * @param {HistoryEntryID} historyEntryID
  * @param {UserID} userID
  * @param {1|-1} direction
  */
-async function addVote(uw, userID, direction) {
-  const results = await uw.redis.multi()
-    .srem('booth:upvotes', userID)
-    .srem('booth:downvotes', userID)
-    .sadd(direction > 0 ? 'booth:upvotes' : 'booth:downvotes', userID)
-    .exec();
-  assert(results);
-
-  const replacedUpvote = results[0][1] !== 0;
-  const replacedDownvote = results[1][1] !== 0;
-
-  // Replaced an upvote by an upvote or a downvote by a downvote: the vote didn't change.
-  // We don't need to broadcast the non-change to everyone.
-  if ((replacedUpvote && direction > 0) || (replacedDownvote && direction < 0)) {
-    return;
-  }
+async function addVote(uw, historyEntryID, userID, direction) {
+  await uw.db.insertInto('feedback')
+    .values({
+      historyEntryID,
+      userID,
+      vote: direction,
+    })
+    .onConflict((oc) => oc.columns(['historyEntryID', 'userID']).doUpdateSet({ vote: direction }))
+    .execute();
 
   uw.publish('booth:vote', {
     userID, direction,
@@ -233,13 +239,15 @@ async function addVote(uw, userID, direction) {
  */
 async function socketVote(uw, userID, direction) {
   const currentDJ = await getCurrentDJ(uw);
-  if (currentDJ !== null && currentDJ !== userID) {
-    const historyID = await uw.redis.get('booth:historyID');
-    if (historyID === null) return;
+  if (currentDJ != null && currentDJ !== userID) {
+    const historyEntryID = await getCurrentHistoryID(uw);
+    if (historyEntryID == null) {
+      return;
+    }
     if (direction > 0) {
-      await addVote(uw, userID, 1);
+      await addVote(uw, historyEntryID, userID, 1);
     } else {
-      await addVote(uw, userID, -1);
+      await addVote(uw, historyEntryID, userID, -1);
     }
   }
 }
@@ -256,29 +264,21 @@ async function getVote(req) {
   const { uwave: uw, user } = req;
   const { historyID } = req.params;
 
-  const [currentDJ, currentHistoryID] = await Promise.all([
-    getCurrentDJ(uw),
-    uw.redis.get('booth:historyID'),
-  ]);
-  if (currentDJ === null || currentHistoryID === null) {
+  const currentHistoryID = await getCurrentHistoryID(uw);
+  if (currentHistoryID == null) {
     throw new HTTPError(412, 'Nobody is playing');
   }
   if (historyID && historyID !== currentHistoryID) {
     throw new HTTPError(412, 'Cannot get vote for media that is not currently playing');
   }
 
-  const [upvoted, downvoted] = await Promise.all([
-    uw.redis.sismember('booth:upvotes', user.id),
-    uw.redis.sismember('booth:downvotes', user.id),
-  ]);
+  const feedback = await uw.db.selectFrom('feedback')
+    .where('historyEntryID', '=', historyID)
+    .where('userID', '=', user.id)
+    .select('vote')
+    .executeTakeFirst();
 
-  let direction = 0;
-  if (upvoted) {
-    direction = 1;
-  } else if (downvoted) {
-    direction = -1;
-  }
-
+  const direction = feedback?.vote ?? 0;
   return toItemResponse({ direction });
 }
 
@@ -299,9 +299,9 @@ async function vote(req) {
 
   const [currentDJ, currentHistoryID] = await Promise.all([
     getCurrentDJ(uw),
-    uw.redis.get('booth:historyID'),
+    getCurrentHistoryID(uw),
   ]);
-  if (currentDJ === null || currentHistoryID === null) {
+  if (currentDJ == null || currentHistoryID == null) {
     throw new HTTPError(412, 'Nobody is playing');
   }
   if (currentDJ === user.id) {
@@ -312,9 +312,9 @@ async function vote(req) {
   }
 
   if (direction > 0) {
-    await addVote(uw, user.id, 1);
+    await addVote(uw, historyID, user.id, 1);
   } else {
-    await addVote(uw, user.id, -1);
+    await addVote(uw, historyID, user.id, -1);
   }
 
   return toItemResponse({});
@@ -349,8 +349,6 @@ async function favorite(req) {
     throw new PlaylistNotFoundError({ id: playlistID });
   }
 
-  // `.media` has the same shape as `.item`, but is guaranteed to exist and have
-  // the same properties as when the playlist item was actually played.
   const result = await playlists.addPlaylistItems(
     playlist,
     [{

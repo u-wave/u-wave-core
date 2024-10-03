@@ -6,6 +6,8 @@ const { clamp } = lodash;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
+/** @typedef {import('../schema.js').Database} Database */
+
 const historyEntrySelection = /** @type {const} */ ([
   'historyEntries.id',
   'historyEntries.artist',
@@ -26,6 +28,24 @@ const historyEntrySelection = /** @type {const} */ ([
   'media.sourceType as media.sourceType',
   'media.sourceID as media.sourceID',
   'media.sourceData as media.sourceData',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('vote', '=', 1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('upvotes'),
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('vote', '=', -1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('downvotes'),
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('favorite', '=', 1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('favorites'),
 ]);
 
 /**
@@ -49,6 +69,9 @@ const historyEntrySelection = /** @type {const} */ ([
  *   'media.title': string,
  *   'media.thumbnail': string,
  *   'media.duration': number,
+ *   upvotes: string,
+ *   downvotes: string,
+ *   favorites: string,
  * }} row
  */
 function historyEntryFromRow(row) {
@@ -78,6 +101,12 @@ function historyEntryFromRow(row) {
         duration: row['media.duration'],
       },
     },
+    /** @type {UserID[]} */
+    upvotes: JSON.parse(row.upvotes),
+    /** @type {UserID[]} */
+    downvotes: JSON.parse(row.downvotes),
+    /** @type {UserID[]} */
+    favorites: JSON.parse(row.favorites),
   };
 }
 

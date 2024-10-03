@@ -107,15 +107,13 @@ async function up({ context: uw }) {
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
 
-  /*
   await db.schema.createTable('feedback')
+    .addColumn('history_entry_id', 'uuid', (col) => col.notNull().references('historyEntries.id'))
     .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
-    .addColumn('history_id', 'uuid', (col) => col.notNull().references('history_entries.id'))
-    // +1 or -1
-    .addColumn('vote', 'integer')
-    .addColumn('favorite', 'boolean')
+    .addColumn('vote', 'integer', (col) => col.defaultTo(0))
+    .addColumn('favorite', 'integer', (col) => col.defaultTo(0))
+    .addUniqueConstraint('one_vote_per_user', ['history_entry_id', 'user_id'])
     .execute();
-  */
 
   await db.schema.alterTable('users')
     .addColumn('active_playlist_id', 'uuid', (col) => col.references('playlists.id'))

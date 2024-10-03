@@ -20,9 +20,6 @@ const REDIS_ADVANCING = 'booth:advancing';
 const REDIS_HISTORY_ID = 'booth:historyID';
 const REDIS_CURRENT_DJ_ID = 'booth:currentDJ';
 const REDIS_REMOVE_AFTER_CURRENT_PLAY = 'booth:removeAfterCurrentPlay';
-const REDIS_UPVOTES = 'booth:upvotes';
-const REDIS_DOWNVOTES = 'booth:downvotes';
-const REDIS_FAVORITES = 'booth:favorites';
 
 const REMOVE_AFTER_CURRENT_PLAY_SCRIPT = {
   keys: [REDIS_CURRENT_DJ_ID, REDIS_REMOVE_AFTER_CURRENT_PLAY],
@@ -120,6 +117,9 @@ class Booth {
     const entry = await db.selectFrom('historyEntries')
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
       .innerJoin('users', 'historyEntries.userID', 'users.id')
+      .leftJoin('feedback as upvotes', (join) => join.onRef('historyEntries.id', '=', 'upvotes.historyEntryID').on('vote', '=', 1))
+      .leftJoin('feedback as downvotes', (join) => join.onRef('historyEntries.id', '=', 'downvotes.historyEntryID').on('vote', '=', -1))
+      .leftJoin('feedback as favorites', (join) => join.onRef('historyEntries.id', '=', 'favorites.historyEntryID').on('favorite', '=', 1))
       .select([
         'historyEntries.id as id',
         'media.id as media.id',
@@ -139,8 +139,12 @@ class Booth {
         'historyEntries.start',
         'historyEntries.end',
         'historyEntries.createdAt',
+        (eb) => eb.fn.agg('json_group_array', ['upvotes.userID']).as('upvotes'),
+        (eb) => eb.fn.agg('json_group_array', ['downvotes.userID']).as('downvotes'),
+        (eb) => eb.fn.agg('json_group_array', ['favorites.userID']).as('favorites'),
       ])
       .where('historyEntries.id', '=', historyID)
+      .groupBy('historyEntries.id')
       .executeTakeFirst();
 
     return entry ? {
@@ -170,35 +174,10 @@ class Booth {
         end: entry.end,
         createdAt: entry.createdAt,
       },
-      // TODO
-      upvotes: [],
-      downvotes: [],
-      favorites: [],
+      upvotes: /** @type {UserID[]} */ (JSON.parse(entry.upvotes)),
+      downvotes: /** @type {UserID[]} */ (JSON.parse(entry.downvotes)),
+      favorites: /** @type {UserID[]} */ (JSON.parse(entry.favorites)),
     } : null;
-  }
-
-  /**
-   * Get vote counts for the currently playing media.
-   *
-   * @returns {Promise<{ upvotes: UserID[], downvotes: UserID[], favorites: UserID[] }>}
-   */
-  async getCurrentVoteStats() {
-    const { redis } = this.#uw;
-
-    const results = await redis.pipeline()
-      .smembers(REDIS_UPVOTES)
-      .smembers(REDIS_DOWNVOTES)
-      .smembers(REDIS_FAVORITES)
-      .exec();
-    assert(results);
-
-    const voteStats = {
-      upvotes: /** @type {UserID[]} */ (results[0][1]),
-      downvotes: /** @type {UserID[]} */ (results[1][1]),
-      favorites: /** @type {UserID[]} */ (results[2][1]),
-    };
-
-    return voteStats;
   }
 
   /** @param {{ remove?: boolean }} options */
@@ -275,9 +254,6 @@ class Booth {
       REDIS_HISTORY_ID,
       REDIS_CURRENT_DJ_ID,
       REDIS_REMOVE_AFTER_CURRENT_PLAY,
-      REDIS_UPVOTES,
-      REDIS_DOWNVOTES,
-      REDIS_FAVORITES,
     );
   }
 
@@ -286,7 +262,7 @@ class Booth {
    */
   async #update(next) {
     await this.#uw.redis.multi()
-      .del(REDIS_UPVOTES, REDIS_DOWNVOTES, REDIS_FAVORITES, REDIS_REMOVE_AFTER_CURRENT_PLAY)
+      .del(REDIS_REMOVE_AFTER_CURRENT_PLAY)
       .set(REDIS_HISTORY_ID, next.historyEntry.id)
       .set(REDIS_CURRENT_DJ_ID, next.user.id)
       .exec();

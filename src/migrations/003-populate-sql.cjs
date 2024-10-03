@@ -107,6 +107,12 @@ async function up({ context: uw }) {
         })
         .execute();
 
+      if (user.roles.length > 0) {
+        await tx.insertInto('userRoles')
+          .values(user.roles.map((role) => ({ userID, role })))
+          .execute();
+      }
+
       for await (const playlist of models.Playlist.where('author', user._id).lean()) {
         const playlistID = randomUUID();
         idMap.set(playlist._id.toString(), playlistID);
@@ -188,9 +194,42 @@ async function up({ context: uw }) {
           end: entry.media.end,
           sourceData: jsonb(entry.media.sourceData),
           createdAt: entry.playedAt.toISOString(),
-          // TODO vote statistics
         })
         .execute();
+
+      const feedback = new Map();
+      for (const id of entry.upvotes) {
+        feedback.set(id.toString(), {
+          historyEntryID: entryID,
+          userID: idMap.get(id.toString()),
+          vote: 1,
+        })
+      }
+      for (const id of entry.downvotes) {
+        feedback.set(id.toString(), {
+          historyEntryID: entryID,
+          userID: idMap.get(id.toString()),
+          vote: -1,
+        })
+      }
+      for (const id of entry.favorites) {
+        const entry = feedback.get(id.toString());
+        if (entry != null) {
+          entry.favorite = 1;
+        } else {
+          feedback.set(id.toString(), {
+            historyEntryID: entryID,
+            userID: idMap.get(id.toString()),
+            favorite: 1,
+          });
+        }
+      }
+
+      if (feedback.size > 0) {
+        await tx.insertInto('feedback')
+          .values(Array.from(feedback.values()))
+          .execute();
+      }
     }
   })
   .finally(() => mongo.disconnect());

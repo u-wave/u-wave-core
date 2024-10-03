@@ -112,6 +112,14 @@ export interface HistoryEntryTable {
   createdAt: Generated<Date>,
 }
 
+export type Feedback = Selected<FeedbackTable>;
+export interface FeedbackTable {
+  historyEntryID: HistoryEntryID,
+  userID: UserID,
+  vote: Generated<-1 | 0 | 1>,
+  favorite: Generated<0 | 1>,
+}
+
 export interface ConfigurationTable {
   name: string,
   value: JsonObject | null,
@@ -133,4 +141,5 @@ export interface Database {
   playlists: PlaylistTable,
   playlistItems: PlaylistItemTable,
   historyEntries: HistoryEntryTable,
+  feedback: FeedbackTable,
 }
