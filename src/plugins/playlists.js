@@ -172,10 +172,8 @@ class PlaylistsRepository {
    * @param {User} user
    * @param {PlaylistID} id
    */
-  async getUserPlaylist(user, id) {
-    const { db } = this.#uw;
-
-    const playlist = await db.selectFrom('playlists')
+  async getUserPlaylist(user, id, tx = this.#uw.db) {
+    const playlist = await tx.selectFrom('playlists')
       .where('userID', '=', user.id)
       .where('id', '=', id)
       .select([
@@ -201,11 +199,10 @@ class PlaylistsRepository {
    * @param {User} user
    * @param {{ name: string }} options
    */
-  async createPlaylist(user, { name }) {
-    const { db } = this.#uw;
+  async createPlaylist(user, { name }, tx = this.#uw.db) {
     const id = /** @type {PlaylistID} */ (randomUUID());
 
-    const playlist = await db.insertInto('playlists')
+    const playlist = await tx.insertInto('playlists')
       .values({
         id,
         name,
@@ -226,7 +223,7 @@ class PlaylistsRepository {
     // If this is the user's first playlist, immediately activate it.
     if (user.activePlaylistID == null) {
       this.#logger.info({ userId: user.id, playlistId: playlist.id }, 'activating first playlist');
-      await db.updateTable('users')
+      await tx.updateTable('users')
         .where('users.id', '=', user.id)
         .set({ activePlaylistID: playlist.id })
         .execute();
@@ -239,10 +236,8 @@ class PlaylistsRepository {
   /**
    * @param {User} user
    */
-  async getUserPlaylists(user) {
-    const { db } = this.#uw;
-
-    const playlists = await db.selectFrom('playlists')
+  async getUserPlaylists(user, tx = this.#uw.db) {
+    const playlists = await tx.selectFrom('playlists')
       .where('userID', '=', user.id)
       .select([
         'id',
@@ -263,10 +258,8 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @param {Partial<Pick<Playlist, 'name'>>} patch
    */
-  async updatePlaylist(playlist, patch = {}) {
-    const { db } = this.#uw;
-
-    const updatedPlaylist = await db.updateTable('playlists')
+  async updatePlaylist(playlist, patch = {}, tx = this.#uw.db) {
+    const updatedPlaylist = await tx.updateTable('playlists')
       .where('id', '=', playlist.id)
       .set(patch)
       .returning([
@@ -297,10 +290,8 @@ class PlaylistsRepository {
   /**
    * @param {Playlist} playlist
    */
-  async shufflePlaylist(playlist) {
-    const { db } = this.#uw;
-
-    await db.updateTable('playlists')
+  async shufflePlaylist(playlist, tx = this.#uw.db) {
+    await tx.updateTable('playlists')
       .where('id', '=', playlist.id)
       .set('items', (eb) => arrayShuffle(eb.ref('items')))
       .execute();
@@ -309,10 +300,8 @@ class PlaylistsRepository {
   /**
    * @param {Playlist} playlist
    */
-  async deletePlaylist(playlist) {
-    const { db } = this.#uw;
-
-    await db.deleteFrom('playlists')
+  async deletePlaylist(playlist, tx = this.#uw.db) {
+    await tx.deleteFrom('playlists')
       .where('id', '=', playlist.id)
       .execute();
   }
@@ -321,10 +310,8 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @param {PlaylistItemID} itemID
    */
-  async getPlaylistItem(playlist, itemID) {
-    const { db } = this.#uw;
-
-    const raw = await db.selectFrom('playlistItems')
+  async getPlaylistItem(playlist, itemID, tx = this.#uw.db) {
+    const raw = await tx.selectFrom('playlistItems')
       .where('playlistItems.id', '=', itemID)
       .where('playlistItems.playlistID', '=', playlist.id)
       .innerJoin('media', 'media.id', 'playlistItems.mediaID')
@@ -342,10 +329,8 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @param {number} order
    */
-  async getPlaylistItemAt(playlist, order) {
-    const { db } = this.#uw;
-
-    const raw = await db.selectFrom('playlistItems')
+  async getPlaylistItemAt(playlist, order, tx = this.#uw.db) {
+    const raw = await tx.selectFrom('playlistItems')
       .where('playlistItems.playlistID', '=', playlist.id)
       .where('playlistItems.id', '=', (eb) => {
         /** @type {import('kysely').RawBuilder<PlaylistItemID>} */
@@ -371,10 +356,8 @@ class PlaylistsRepository {
    * @param {string|undefined} filter
    * @param {{ offset: number, limit: number }} pagination
    */
-  async getPlaylistItems(playlist, filter, pagination) {
-    const { db } = this.#uw;
-
-    let query = db.selectFrom('playlists')
+  async getPlaylistItems(playlist, filter, pagination, tx = this.#uw.db) {
+    let query = tx.selectFrom('playlists')
       .innerJoin(
         (eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'),
         (join) => join,
@@ -398,12 +381,12 @@ class PlaylistsRepository {
       .offset(pagination.offset)
       .limit(pagination.limit);
 
-    const totalQuery = db.selectFrom('playlists')
+    const totalQuery = tx.selectFrom('playlists')
       .select((eb) => jsonLength(eb.ref('items')).as('count'))
       .where('id', '=', playlist.id)
       .executeTakeFirstOrThrow();
 
-    const filteredQuery = filter == null ? totalQuery : db.selectFrom('playlistItems')
+    const filteredQuery = filter == null ? totalQuery : tx.selectFrom('playlistItems')
       .select((eb) => eb.fn.countAll().as('count'))
       .where('playlistID', '=', playlist.id)
       .where((eb) => eb.or([
@@ -450,10 +433,8 @@ class PlaylistsRepository {
    * @param {MediaID} mediaID
    * @param {GetPlaylistsContainingMediaOptions} options
    */
-  async getPlaylistsContainingMedia(mediaID, options = {}) {
-    const { db } = this.#uw;
-
-    let query = db.selectFrom('playlists')
+  async getPlaylistsContainingMedia(mediaID, options = {}, tx = this.#uw.db) {
+    let query = tx.selectFrom('playlists')
       .select([
         'playlists.id',
         'playlists.userID',
@@ -481,16 +462,14 @@ class PlaylistsRepository {
    * @param {{ author?: UserID }} options
    * @returns A map of media IDs to the Playlist objects that contain them.
    */
-  async getPlaylistsContainingAnyMedia(mediaIDs, options = {}) {
-    const { db } = this.#uw;
-
+  async getPlaylistsContainingAnyMedia(mediaIDs, options = {}, tx = this.#uw.db) {
     /** @type {Multimap<MediaID, Playlist>} */
     const playlistsByMediaID = new Multimap();
     if (mediaIDs.length === 0) {
       return playlistsByMediaID;
     }
 
-    let query = db.selectFrom('playlists')
+    let query = tx.selectFrom('playlists')
       .innerJoin('playlistItems', 'playlists.id', 'playlistItems.playlistID')
       .select([
         'playlists.id',
@@ -678,10 +657,10 @@ class PlaylistsRepository {
    * @param {Partial<Pick<PlaylistItem, 'artist' | 'title' | 'start' | 'end'>>} patch
    * @returns {Promise<PlaylistItem>}
    */
-  async updatePlaylistItem(item, patch = {}) {
+  async updatePlaylistItem(item, patch = {}, tx = this.#uw.db) {
     const { db } = this.#uw;
 
-    const updatedItem = await db.updateTable('playlistItems')
+    const updatedItem = await tx.updateTable('playlistItems')
       .where('id', '=', item.id)
       .set(patch)
       .returningAll()
@@ -755,7 +734,8 @@ class PlaylistsRepository {
   async removePlaylistItems(playlist, itemIDs) {
     const { db } = this.#uw;
 
-    const rows = await db.selectFrom('playlists')
+    await db.transaction().execute(async (tx) => {
+    const rows = await tx.selectFrom('playlists')
       .innerJoin((eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'), (join) => join)
       .select('playlistItemIDs.value as itemID')
       .where('playlists.id', '=', playlist.id)
@@ -775,7 +755,6 @@ class PlaylistsRepository {
       }
     });
 
-    await db.transaction().execute(async (tx) => {
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)
         .set({ items: jsonb(toKeep) })

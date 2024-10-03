@@ -105,15 +105,13 @@ class Booth {
     this.#maybeStop();
   }
 
-  async getCurrentEntry() {
-    const { db } = this.#uw;
-
+  async getCurrentEntry(tx = this.#uw.db) {
     const historyID = /** @type {HistoryEntryID} */ (await this.#uw.redis.get(REDIS_HISTORY_ID));
     if (!historyID) {
       return null;
     }
 
-    const entry = await db.selectFrom('historyEntries')
+    const entry = await tx.selectFrom('historyEntries')
       .innerJoin('media', 'historyEntries.mediaID', 'media.id')
       .innerJoin('users', 'historyEntries.userID', 'users.id')
       .select([
@@ -187,8 +185,10 @@ class Booth {
     } : null;
   }
 
-  /** @param {{ remove?: boolean }} options */
-  async #getNextDJ(options) {
+  /**
+   * @param {{ remove?: boolean }} options
+   */
+  async #getNextDJ(options, tx = this.#uw.db) {
     let userID = /** @type {UserID|null} */ (await this.#uw.redis.lindex('waitlist', 0));
     if (!userID && !options.remove) {
       // If the waitlist is empty, the current DJ will play again immediately.
@@ -198,7 +198,7 @@ class Booth {
       return null;
     }
 
-    return this.#uw.users.getUser(userID);
+    return this.#uw.users.getUser(userID, tx);
   }
 
   /**
@@ -396,7 +396,7 @@ class Booth {
       !await this.#uw.waitlist.isCycleEnabled()
     );
 
-    const previous = await this.getCurrentEntry();
+    const previous = await this.getCurrentEntry(tx);
     let next;
     try {
       next = await this.#getNextEntry({ remove });

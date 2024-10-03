@@ -56,27 +56,27 @@ class Acl {
   async maybeAddDefaultRoles() {
     const { db } = this.#uw;
 
-    const { existingRoles } = await db.selectFrom('roles')
-      .select((eb) => eb.fn.countAll().as('existingRoles'))
-      .executeTakeFirstOrThrow();
-    this.#logger.debug({ roles: existingRoles }, 'existing roles');
-    if (existingRoles === 0) {
-      this.#logger.info('no roles found, adding defaults');
-      for (const [roleName, permissions] of Object.entries(defaultRoles)) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.createRole(roleName, permissions);
+    await db.transaction().execute(async (tx) => {
+      const { existingRoles } = await tx.selectFrom('roles')
+        .select((eb) => eb.fn.countAll().as('existingRoles'))
+        .executeTakeFirstOrThrow();
+      this.#logger.debug({ roles: existingRoles }, 'existing roles');
+      if (existingRoles === 0) {
+        this.#logger.info('no roles found, adding defaults');
+        for (const [roleName, permissions] of Object.entries(defaultRoles)) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.createRole(roleName, permissions, tx);
+        }
       }
-    }
+    });
   }
 
   /**
    * @returns {Promise<Record<string, Permission[]>>}
    */
-  async getAllRoles() {
-    const { db } = this.#uw;
-
+  async getAllRoles(tx = this.#uw.db) {
     // TODO: `json()` should be strongly typed
-    const list = await db.selectFrom('roles')
+    const list = await tx.selectFrom('roles')
       .select(['id', sql`json(permissions)`.as('permissions')])
       .execute();
 
@@ -92,10 +92,8 @@ class Acl {
    * @param {string} name
    * @param {Permission[]} permissions
    */
-  async createRole(name, permissions) {
-    const { db } = this.#uw;
-
-    await db.insertInto('roles')
+  async createRole(name, permissions, tx = this.#uw.db) {
+    await tx.insertInto('roles')
       .values({ id: name, permissions: jsonb(permissions) })
       .onConflict((conflict) => conflict.column('id').doUpdateSet({ permissions: jsonb(permissions) }))
       .execute();
@@ -106,13 +104,11 @@ class Acl {
   /**
    * @param {string} name
    */
-  async deleteRole(name) {
-    const { db } = this.#uw;
-
-    await db.deleteFrom('userRoles')
+  async deleteRole(name, tx = this.#uw.db) {
+    await tx.deleteFrom('userRoles')
       .where('role', '=', name)
       .execute();
-    await db.deleteFrom('roles')
+    await tx.deleteFrom('roles')
       .where('id', '=', name)
       .execute();
   }
@@ -122,10 +118,8 @@ class Acl {
    * @param {string[]} roleNames
    * @returns {Promise<void>}
    */
-  async allow(user, roleNames) {
-    const { db } = this.#uw;
-
-    const insertedRoles = await db.insertInto('userRoles')
+  async allow(user, roleNames, tx = this.#uw.db) {
+    const insertedRoles = await tx.insertInto('userRoles')
       .values(roleNames.map((roleName) => ({
         userID: user.id,
         role: roleName,
@@ -144,10 +138,8 @@ class Acl {
    * @param {string[]} roleNames
    * @returns {Promise<void>}
    */
-  async disallow(user, roleNames) {
-    const { db } = this.#uw;
-
-    const deletedRoles = await db.deleteFrom('userRoles')
+  async disallow(user, roleNames, tx = this.#uw.db) {
+    const deletedRoles = await tx.deleteFrom('userRoles')
       .where('userID', '=', user.id)
       .where('role', 'in', roleNames)
       .returningAll()
@@ -165,10 +157,8 @@ class Acl {
    * @param {User} user
    * @returns {Promise<Permission[]>}
    */
-  async getAllPermissions(user) {
-    const { db } = this.#uw;
-
-    const permissions = await db.selectFrom('userRoles')
+  async getAllPermissions(user, tx = this.#uw.db) {
+    const permissions = await tx.selectFrom('userRoles')
       .where('userID', '=', user.id)
       .innerJoin('roles', 'roles.id', 'userRoles.role')
       .innerJoin(
@@ -186,8 +176,8 @@ class Acl {
    * @param {Permission} permission
    * @returns {Promise<boolean>}
    */
-  async isAllowed(user, permission) {
-    const permissions = await this.getAllPermissions(user);
+  async isAllowed(user, permission, tx = this.#uw.db) {
+    const permissions = await this.getAllPermissions(user, tx);
     const isAllowed = permissions.includes(permission) || permissions.includes(Permissions.Super);
 
     this.#logger.trace({

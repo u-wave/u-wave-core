@@ -109,19 +109,19 @@ class UsersRepository {
    * Get a user object by ID.
    *
    * @param {UserID} id
+   * @param {import('../schema.js').Kysely} [tx]
    */
-  async getUser(id) {
-    const [user] = await this.getUsersByIds([id]);
+  async getUser(id, tx) {
+    const [user] = await this.getUsersByIds([id], tx);
     return user ?? null;
   }
 
   /**
    * @param {UserID[]} ids
+   * @param {import('../schema.js').Kysely} [tx]
    */
-  async getUsersByIds(ids) {
-    const { db } = this.#uw;
-
-    const users = await db.selectFrom('users')
+  async getUsersByIds(ids, tx = this.#uw.db) {
+    const users = await tx.selectFrom('users')
       .where('id', 'in', ids)
       .select([
         'users.id',

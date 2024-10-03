@@ -1,4 +1,4 @@
-import type { Generated } from 'kysely';
+import type { Kysely as KyselyBase, Generated } from 'kysely';
 import type { JsonObject, Tagged } from 'type-fest';
 
 export type UserID = Tagged<string, 'UserID'>;
@@ -153,3 +153,5 @@ export interface Database {
   historyEntries: HistoryEntryTable,
   feedback: FeedbackTable,
 }
+
+export type Kysely = KyselyBase<Database>;
