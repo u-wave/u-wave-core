@@ -1,4 +1,4 @@
-import { JsonObject } from 'type-fest'; // eslint-disable-line import/no-unresolved, node/no-missing-import, node/no-unpublished-import
+import { JsonObject } from 'type-fest'; // eslint-disable-line import/no-unresolved, n/no-missing-import, n/no-unpublished-import
 
 export type ServerActionParameters = {
   'advance:complete': {

@@ -375,7 +375,7 @@ const styleRules = {
   // disallow dangling underscores in identifiers
   // https://eslint.org/docs/rules/no-underscore-dangle
   'no-underscore-dangle': ['error', {
-    allow: [],
+    allow: ['_id'],
     allowAfterThis: false,
     allowAfterSuper: false,
     enforceInMethodNames: true,
@@ -553,7 +553,7 @@ export default ts.config(
         devDependencies: [
           'test/**',
           'dev/**',
-          '**/.eslintrc.js',
+          '**/eslint.config.js',
         ],
         optionalDependencies: false,
       }],
@@ -564,7 +564,7 @@ export default ts.config(
       // I disagree that this is bad
       'max-classes-per-file': 'off',
       // Allow `continue` in loops
-      'no-continue': ['off'],
+      'no-continue': 'off',
       // Allow `for..of`
       'no-restricted-syntax': [
         'error',
@@ -596,6 +596,7 @@ export default ts.config(
     rules: {
       strict: ['error', 'global'],
       '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {

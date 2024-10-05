@@ -23,7 +23,7 @@ const uw = uwave({
   helmet: false,
 });
 
-uw.use(async function registerSources () {
+uw.use(async function registerSources() {
   // Register your Media Sources. The API keys are configured in the config.json
   // file.
   uw.source(youTubeSource, {
@@ -34,7 +34,7 @@ uw.use(async function registerSources () {
   });
 });
 
-uw.use(async function registerWebClient () {
+uw.use(async function registerWebClient() {
   const webClient = createWebClient({
     apiBase: '/api',
   });
