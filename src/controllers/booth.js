@@ -332,7 +332,7 @@ async function vote(req) {
 async function favorite(req) {
   const { user } = req;
   const { playlistID, historyID } = req.body;
-  const { history, playlists } = req.uwave;
+  const { db, history, playlists } = req.uwave;
   const uw = req.uwave;
 
   const historyEntry = await history.getEntry(historyID);
@@ -362,7 +362,11 @@ async function favorite(req) {
     { at: 'end' },
   );
 
-  await uw.redis.sadd('booth:favorites', user.id);
+  await db.insertInto('feedback')
+    .values({ userID: user.id, historyEntryID: historyID, favorite: 1 })
+    .onConflict((oc) => oc.columns(['userID', 'historyEntryID']).doUpdateSet({ favorite: 1 }))
+    .execute();
+
   uw.publish('booth:favorite', {
     userID: user.id,
     playlistID,
