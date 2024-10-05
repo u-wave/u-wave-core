@@ -71,6 +71,9 @@ async function createUwave(name, options) {
     sqlite: ':memory:',
     mongo: null,
     secret: Buffer.from(`secret_${name}`),
+    logger: {
+      level: 'silent',
+    },
   });
 
   uw.use(testPlugin);
