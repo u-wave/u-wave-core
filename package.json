@@ -94,7 +94,7 @@
     "@types/passport-google-oauth20": "^2.0.7",
     "@types/passport-local": "^1.0.33",
     "@types/qs": "^6.9.6",
-    "@types/random-string": "^0.0.31",
+    "@types/random-string": "^0.2.0",
     "@types/ratelimiter": "^3.4.1",
     "@types/sinon": "^17.0.0",
     "@types/supertest": "^6.0.1",
