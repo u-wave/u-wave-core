@@ -146,7 +146,7 @@ async function httpApi(uw, options) {
       callback(null, matchOrigin(origin, runtimeOptions.allowedOrigins));
     },
   };
-  uw.express.options('/api/*', cors(corsOptions));
+  uw.express.options('/api/*path', cors(corsOptions));
   uw.express.use('/api', cors(corsOptions), uw.httpApi);
   // An older name
   uw.express.use('/v1', cors(corsOptions), uw.httpApi);
