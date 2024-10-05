@@ -358,7 +358,7 @@ class Emotes {
  * @returns {Promise<void>}
  */
 async function emotesPlugin(uw) {
-  uw.emotes = new Emotes(uw); // eslint-disable-line no-param-reassign
+  uw.emotes = new Emotes(uw);
   uw.httpApi.use('/emotes', routes());
 }
 

@@ -365,7 +365,7 @@ class Waitlist {
  * @returns {Promise<void>}
  */
 async function waitlistPlugin(uw) {
-  uw.waitlist = new Waitlist(uw); // eslint-disable-line no-param-reassign
+  uw.waitlist = new Waitlist(uw);
   uw.httpApi.use('/waitlist', routes());
 }
 

@@ -41,7 +41,7 @@ class Bans {
    *
    * @param {User} user A user object.
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async isBanned(user) {
     return isValidBan(user);
   }
@@ -171,7 +171,7 @@ class Bans {
  * @param {import('../Uwave.js').default} uw
  */
 async function bans(uw) {
-  uw.bans = new Bans(uw); // eslint-disable-line no-param-reassign
+  uw.bans = new Bans(uw);
 }
 
 export default bans;

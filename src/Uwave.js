@@ -228,7 +228,7 @@ class UwaveServer extends EventEmitter {
    *     a source plugin factory was passed to `sourcePlugin`.
    */
   source(sourcePlugin, opts = {}) {
-    if (typeof sourcePlugin === 'string') { // eslint-disable-line prefer-rest-params
+    if (typeof sourcePlugin === 'string') {
       return this.#sources.get(sourcePlugin);
     }
 

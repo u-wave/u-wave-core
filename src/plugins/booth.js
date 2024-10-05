@@ -300,7 +300,7 @@ class Booth {
    *
    * @param {PopulateMedia} historyEntry
    */
-  // eslint-disable-next-line class-methods-use-this
+
   getMediaForPlayback(historyEntry) {
     return Object.assign(omit(historyEntry.media, 'sourceData'), {
       media: {
