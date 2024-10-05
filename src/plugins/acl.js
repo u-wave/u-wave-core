@@ -39,7 +39,6 @@ class Acl {
     if (existingRoles === 0) {
       this.#logger.info('no roles found, adding defaults');
       for (const [roleName, permissions] of Object.entries(defaultRoles)) {
-        // eslint-disable-next-line no-await-in-loop
         await this.createRole(roleName, permissions);
       }
     }

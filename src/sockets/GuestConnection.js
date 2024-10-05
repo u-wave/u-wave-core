@@ -92,7 +92,6 @@ class GuestConnection extends EventEmitter {
     this.events.remove();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   toString() {
     return 'Guest';
   }

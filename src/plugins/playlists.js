@@ -179,7 +179,7 @@ class PlaylistsRepository {
    * @param {object} patch
    * @returns {Promise<Playlist>}
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async updatePlaylist(playlist, patch = {}) {
     Object.assign(playlist, patch);
     await playlist.save();
@@ -190,7 +190,7 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @returns {Promise<Playlist>}
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async shufflePlaylist(playlist) {
     playlist.media = shuffle(playlist.media);
     await playlist.save();
@@ -201,7 +201,7 @@ class PlaylistsRepository {
    * @param {Playlist} playlist
    * @returns {Promise<void>}
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async deletePlaylist(playlist) {
     await playlist.deleteOne();
   }
@@ -535,7 +535,7 @@ class PlaylistsRepository {
    * @param {object} patch
    * @returns {Promise<PlaylistItem>}
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async updatePlaylistItem(item, patch = {}) {
     Object.assign(item, patch);
     await item.save();
@@ -547,7 +547,7 @@ class PlaylistsRepository {
    * @param {ObjectId[]} itemIDs
    * @param {{ afterID: ObjectId? }} options
    */
-  // eslint-disable-next-line class-methods-use-this
+
   async movePlaylistItems(playlist, itemIDs, { afterID }) {
     // Use a plain array instead of a mongoose array because we need `splice()`.
     const itemsInPlaylist = [...playlist.media];

@@ -58,7 +58,6 @@ describe('Waitlist', () => {
 
       await Promise.all(users.map(createTestPlaylistItem));
       for (const u of users) {
-        // eslint-disable-next-line no-await-in-loop
         await uw.waitlist.addUser(u.id);
       }
 
