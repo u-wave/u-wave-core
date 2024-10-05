@@ -73,6 +73,7 @@
     "yaml": "^2.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^8.57.1",
     "@tsconfig/node18": "^18.2.2",
     "@types/bcryptjs": "^2.4.2",
     "@types/cookie": "^0.6.0",
@@ -99,16 +100,15 @@
     "@types/supertest": "^6.0.1",
     "@types/ultron": "^1.1.0",
     "@types/ws": "^8.2.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.1",
-    "@typescript-eslint/parser": "^7.0.1",
     "c8": "^10.0.0",
     "concat-stream": "^2.0.0",
     "delay": "^6.0.0",
     "dotenv": "^16.0.0",
     "eslint": "^8.2.0",
-    "eslint-plugin-import": "^2.20.0",
-    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-import": "^2.30.0",
+    "eslint-plugin-n": "^17.10.2",
     "get-port": "^7.0.0",
+    "globals": "^15.9.0",
     "mocha": "^10.0.0",
     "nock": "^13.2.0",
     "nodemon": "^3.0.1",
@@ -117,7 +117,8 @@
     "sinon": "^19.0.2",
     "supertest": "^7.0.0",
     "type-fest": "^4.0.0",
-    "typescript": "~5.6.2"
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.5.0"
   },
   "scripts": {
     "lint": "eslint --cache .",

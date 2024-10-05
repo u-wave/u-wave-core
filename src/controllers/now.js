@@ -15,7 +15,7 @@ async function getFirstItem(uw, activePlaylist) {
       const item = await uw.playlists.getPlaylistItem(playlist, playlist.media[0]);
       return item;
     }
-  } catch (e) {
+  } catch {
     // Nothing
   }
   return null;
