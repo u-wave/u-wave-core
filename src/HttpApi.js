@@ -6,6 +6,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
+import qs from 'qs';
 import { pinoHttp } from 'pino-http';
 
 // routes
@@ -131,6 +132,8 @@ async function httpApi(uw, options) {
     .use('/users', users());
 
   uw.express = express();
+  uw.express.set('query parser', /** @param {string} str */ (str) => qs.parse(str, { depth: 1 }));
+
   uw.server = http.createServer(uw.express);
   if (options.helmet !== false) {
     uw.express.use(helmet({
@@ -146,7 +149,7 @@ async function httpApi(uw, options) {
       callback(null, matchOrigin(origin, runtimeOptions.allowedOrigins));
     },
   };
-  uw.express.options('/api/*', cors(corsOptions));
+  uw.express.options('/api/*path', cors(corsOptions));
   uw.express.use('/api', cors(corsOptions), uw.httpApi);
   // An older name
   uw.express.use('/v1', cors(corsOptions), uw.httpApi);
