@@ -530,7 +530,7 @@ const styleRules = {
 };
 
 export default ts.config(
-  { ignores: ['types/**/*'] },
+  { ignores: ['types/**/*', 'example/**/*'] },
   js.configs.recommended,
   importPlugin.flatConfigs.recommended,
   importPlugin.flatConfigs.typescript,
