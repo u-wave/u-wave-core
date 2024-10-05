@@ -1,5 +1,7 @@
 import globals from 'globals';
 import js from '@eslint/js';
+// Not sure why it doesn't find this?
+// eslint-disable-next-line import/no-unresolved
 import ts from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import';
 import nodePlugin from 'eslint-plugin-n';
@@ -283,10 +285,6 @@ const styleRules = {
   // https://eslint.org/docs/rules/no-bitwise
   'no-bitwise': 'error',
 
-  // disallow use of the continue statement
-  // https://eslint.org/docs/rules/no-continue
-  'no-continue': 'error',
-
   // disallow comments inline after code
   'no-inline-comments': 'off',
 
@@ -557,14 +555,8 @@ export default ts.config(
         ],
         optionalDependencies: false,
       }],
-      // MongoDB IDs
-      'no-underscore-dangle': ['error', { allow: ['_id'] }],
       // Used by plugins
       'no-param-reassign': ['error', { props: false }],
-      // I disagree that this is bad
-      'max-classes-per-file': 'off',
-      // Allow `continue` in loops
-      'no-continue': 'off',
       // Allow `for..of`
       'no-restricted-syntax': [
         'error',
@@ -587,11 +579,12 @@ export default ts.config(
   { rules: styleRules },
 
   {
-    files: ['*.cjs'],
+    files: ['**/*.cjs'],
     languageOptions: {
       parserOptions: {
         sourceType: 'script',
       },
+      globals: globals.commonjs,
     },
     rules: {
       strict: ['error', 'global'],
@@ -600,19 +593,7 @@ export default ts.config(
     },
   },
   {
-    files: ['*.ts'],
-    // parser: '@typescript-eslint/parser',
-    // languageOptions: {
-    //   parserOptions: {
-    //     sourceType: 'module',
-    //   },
-    // },
-    rules: {
-      'n/no-unsupported-features/es-syntax': 'off',
-    },
-  },
-  {
-    files: ['*.mjs'],
+    files: ['**/*.mjs'],
     languageOptions: {
       parserOptions: {
         sourceType: 'module',
@@ -628,6 +609,13 @@ export default ts.config(
       n: {
         allowModules: [PKG_NAME],
       },
+    },
+  },
+  {
+    files: ['eslint.config.js'],
+    rules: {
+      'n/no-unpublished-import': 'off',
+      'n/no-unpublished-require': 'off',
     },
   },
   {
