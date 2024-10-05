@@ -233,6 +233,11 @@ async function up({ context: uw }) {
     }
   })
     .finally(() => mongo.disconnect());
+
+  const motd = await uw.redis.get('motd');
+  if (motd != null && motd !== '') {
+    await uw.motd.set(motd);
+  }
 }
 
 /**

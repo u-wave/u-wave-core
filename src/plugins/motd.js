@@ -1,5 +1,7 @@
 import routes from '../routes/motd.js';
 
+const CONFIG_MOTD = 'u-wave:motd';
+
 class MOTD {
   #uw;
 
@@ -8,13 +10,22 @@ class MOTD {
    */
   constructor(uw) {
     this.#uw = uw;
+
+    uw.config.register(CONFIG_MOTD, {
+      type: 'object',
+      properties: {
+        text: { type: 'string', nullable: true },
+      },
+    });
   }
 
   /**
    * @returns {Promise<string | null>}
    */
-  get() {
-    return this.#uw.redis.get('motd');
+  async get() {
+    const config = /** @type {{ text?: string | null } | null} */ (await this.#uw.config.get(CONFIG_MOTD));
+
+    return config?.text ?? null;
   }
 
   /**
@@ -22,11 +33,7 @@ class MOTD {
    * @returns {Promise<void>}
    */
   async set(motd) {
-    if (motd) {
-      await this.#uw.redis.set('motd', motd);
-    } else {
-      await this.#uw.redis.del('motd');
-    }
+    await this.#uw.config.set(CONFIG_MOTD, { text: motd });
   }
 }
 
