@@ -1,6 +1,12 @@
-'use strict';
+import globals from 'globals';
+import js from '@eslint/js';
+// Not sure why it doesn't find this?
+// eslint-disable-next-line import/no-unresolved
+import ts from 'typescript-eslint';
+import importPlugin from 'eslint-plugin-import';
+import nodePlugin from 'eslint-plugin-n';
 
-const pkg = require('./package.json');
+const PKG_NAME = 'u-wave-core';
 
 // Mostly based on eslint-config-airbnb.
 // TODO(@goto-bus-stop): perhaps replace by prettier :shrug:
@@ -279,10 +285,6 @@ const styleRules = {
   // https://eslint.org/docs/rules/no-bitwise
   'no-bitwise': 'error',
 
-  // disallow use of the continue statement
-  // https://eslint.org/docs/rules/no-continue
-  'no-continue': 'error',
-
   // disallow comments inline after code
   'no-inline-comments': 'off',
 
@@ -371,7 +373,7 @@ const styleRules = {
   // disallow dangling underscores in identifiers
   // https://eslint.org/docs/rules/no-underscore-dangle
   'no-underscore-dangle': ['error', {
-    allow: [],
+    allow: ['_id'],
     allowAfterThis: false,
     allowAfterSuper: false,
     enforceInMethodNames: true,
@@ -527,157 +529,150 @@ const styleRules = {
   'wrap-regex': 'off',
 };
 
-module.exports = {
-  extends: [
-    'eslint:recommended',
-    'plugin:import/recommended',
-    'plugin:import/typescript',
-    'plugin:node/recommended',
-    'plugin:@typescript-eslint/recommended',
-  ],
+export default ts.config(
+  { ignores: ['types/**/*', 'example/**/*'] },
+  js.configs.recommended,
+  importPlugin.flatConfigs.recommended,
+  importPlugin.flatConfigs.typescript,
+  nodePlugin.configs['flat/recommended-module'],
+  ...ts.configs.recommended,
+  {
+    languageOptions: {
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+      },
+    },
 
-  plugins: ['jsdoc', 'import', 'node', '@typescript-eslint'],
-
-  parserOptions: {
-    ecmaVersion: 2022,
-    sourceType: 'module',
-  },
-
-  env: {
-    node: true,
-  },
-
-  rules: {
-    ...styleRules,
-    'import/extensions': ['error', 'ignorePackages'],
-    'import/prefer-default-export': 'off',
-    'import/no-extraneous-dependencies': ['error', {
-      devDependencies: [
-        'test/**',
-        'dev/**',
-        '**/.eslintrc.js',
+    rules: {
+      'import/extensions': ['error', 'ignorePackages'],
+      'import/prefer-default-export': 'off',
+      'import/no-extraneous-dependencies': ['error', {
+        devDependencies: [
+          'test/**',
+          'dev/**',
+          '**/eslint.config.js',
+        ],
+        optionalDependencies: false,
+      }],
+      // Used by plugins
+      'no-param-reassign': ['error', { props: false }],
+      // Allow `for..of`
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ForInStatement',
+          message: 'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.',
+        },
+        {
+          selector: 'LabeledStatement',
+          message: 'Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand.',
+        },
+        {
+          selector: 'WithStatement',
+          message: '`with` is disallowed in strict mode because it makes code impossible to predict and optimize.',
+        },
       ],
-      optionalDependencies: false,
-    }],
-    // MongoDB IDs
-    'no-underscore-dangle': ['error', { allow: ['_id'] }],
-    // Used by plugins
-    'no-param-reassign': ['error', { props: false }],
-    // I disagree that this is bad
-    'max-classes-per-file': 'off',
-    // Allow `continue` in loops
-    'no-continue': ['off'],
-    // Allow `for..of`
-    'no-restricted-syntax': [
-      'error',
-      {
-        selector: 'ForInStatement',
-        message: 'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.',
-      },
-      {
-        selector: 'LabeledStatement',
-        message: 'Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand.',
-      },
-      {
-        selector: 'WithStatement',
-        message: '`with` is disallowed in strict mode because it makes code impossible to predict and optimize.',
-      },
-    ],
+    },
   },
 
-  overrides: [
-    {
-      files: ['*.cjs'],
+  { rules: styleRules },
+
+  {
+    files: ['src/**/*.js'],
+    rules: {
+      'jsdoc/check-access': 'warn',
+      'jsdoc/check-alignment': 'warn',
+      'jsdoc/check-param-names': 'warn',
+      'jsdoc/check-property-names': 'warn',
+      'jsdoc/check-tag-names': 'warn',
+      'jsdoc/check-types': 'warn',
+      'jsdoc/check-values': 'warn',
+      'jsdoc/empty-tags': 'warn',
+      'jsdoc/implements-on-classes': 'warn',
+      'jsdoc/multiline-blocks': 'warn',
+      'jsdoc/no-defaults': 'warn',
+      'jsdoc/no-multi-asterisks': 'warn',
+      'jsdoc/no-undefined-types': 'warn',
+      'jsdoc/require-param': ['warn', { enableFixer: false }],
+      'jsdoc/require-param-name': 'warn',
+      'jsdoc/require-param-type': 'warn',
+      'jsdoc/require-property': ['warn', { enableFixer: false }],
+      'jsdoc/require-property-name': 'warn',
+      'jsdoc/require-property-type': 'warn',
+      // 'jsdoc/require-returns': 'warn',
+      // 'jsdoc/require-returns-check': 'warn',
+      // 'jsdoc/require-returns-type': 'warn',
+      'jsdoc/require-yields': 'warn',
+      'jsdoc/require-yields-check': 'warn',
+      'jsdoc/tag-lines': ['warn', 'never', { startLines: 1 }],
+      'jsdoc/valid-types': 'warn',
+    },
+    settings: {
+      jsdoc: {
+        tagNamePreference: {
+          property: 'prop',
+        },
+      },
+    },
+  },
+
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
       parserOptions: {
         sourceType: 'script',
       },
-      rules: {
-        strict: ['error', 'global'],
-        '@typescript-eslint/no-var-requires': 'off',
-      },
+      globals: globals.commonjs,
     },
-    {
-      files: ['*.ts'],
-      parser: '@typescript-eslint/parser',
+    rules: {
+      strict: ['error', 'global'],
+      '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
       parserOptions: {
         sourceType: 'module',
       },
-      rules: {
-        'node/no-unsupported-features/es-syntax': 'off',
+    },
+    rules: {
+      'import/extensions': ['error', 'ignorePackages'],
+      'import/no-unresolved': ['error', {
+        ignore: [PKG_NAME], // not ideal!
+      }],
+    },
+    settings: {
+      n: {
+        allowModules: [PKG_NAME],
       },
     },
-    {
-      files: ['*.mjs'],
-      parserOptions: {
-        sourceType: 'module',
-      },
-      rules: {
-        'import/extensions': ['error', 'ignorePackages'],
-        'import/no-unresolved': ['error', {
-          ignore: [pkg.name], // not ideal!
-        }],
-      },
-      settings: {
-        node: {
-          allowModules: [pkg.name],
-        },
-      },
+  },
+  {
+    files: ['eslint.config.js'],
+    rules: {
+      'n/no-unpublished-import': 'off',
+      'n/no-unpublished-require': 'off',
     },
-    {
-      files: ['src/**/*.js'],
-      rules: {
-        'jsdoc/check-access': 'warn',
-        'jsdoc/check-alignment': 'warn',
-        'jsdoc/check-param-names': 'warn',
-        'jsdoc/check-property-names': 'warn',
-        'jsdoc/check-tag-names': 'warn',
-        'jsdoc/check-types': 'warn',
-        'jsdoc/check-values': 'warn',
-        'jsdoc/empty-tags': 'warn',
-        'jsdoc/implements-on-classes': 'warn',
-        'jsdoc/multiline-blocks': 'warn',
-        'jsdoc/no-defaults': 'warn',
-        'jsdoc/no-multi-asterisks': 'warn',
-        'jsdoc/no-undefined-types': 'warn',
-        'jsdoc/require-param': ['warn', { enableFixer: false }],
-        'jsdoc/require-param-name': 'warn',
-        'jsdoc/require-param-type': 'warn',
-        'jsdoc/require-property': ['warn', { enableFixer: false }],
-        'jsdoc/require-property-name': 'warn',
-        'jsdoc/require-property-type': 'warn',
-        // 'jsdoc/require-returns': 'warn',
-        // 'jsdoc/require-returns-check': 'warn',
-        // 'jsdoc/require-returns-type': 'warn',
-        'jsdoc/require-yields': 'warn',
-        'jsdoc/require-yields-check': 'warn',
-        'jsdoc/tag-lines': ['warn', 'never', { startLines: 1 }],
-        'jsdoc/valid-types': 'warn',
-      },
-      settings: {
-        jsdoc: {
-          tagNamePreference: {
-            property: 'prop',
-          },
-        },
-      },
+  },
+  {
+    files: ['test/**/*.js'],
+    languageOptions: {
+      globals: globals.mocha,
     },
-    {
-      files: ['test/**/*.js'],
-      env: {
-        mocha: true,
-      },
-      rules: {
-        'node/no-unpublished-require': 'off',
-      },
+    rules: {
+      'n/no-unpublished-require': 'off',
     },
-    {
-      files: ['test/**/*.mjs'],
-      env: {
-        mocha: true,
-      },
-      rules: {
-        'node/no-unpublished-import': 'off',
-      },
+  },
+  {
+    files: ['test/**/*.mjs'],
+    languageOptions: {
+      globals: globals.mocha,
     },
-  ],
-};
+    rules: {
+      'n/no-unpublished-import': 'off',
+    },
+  },
+);

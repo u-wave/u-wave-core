@@ -192,7 +192,7 @@ async function disconnectUser(uw, userID) {
 
   try {
     await removeFromWaitlist(uw, userID);
-  } catch (e) {
+  } catch {
     // Ignore
   }
 

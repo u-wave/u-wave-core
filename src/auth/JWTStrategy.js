@@ -88,7 +88,7 @@ class JWTStrategy extends Strategy {
     let value;
     try {
       value = jwt.verify(token, this.secret);
-    } catch (e) {
+    } catch {
       return this.pass();
     }
 

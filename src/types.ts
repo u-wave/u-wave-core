@@ -1,4 +1,4 @@
-/* eslint-disable node/no-missing-import,node/no-unpublished-import */
+/* eslint-disable n/no-missing-import,n/no-unpublished-import */
 // This file contains supporting types that can't be expressed in JavaScript/JSDoc.
 
 import type { ParsedQs } from 'qs';

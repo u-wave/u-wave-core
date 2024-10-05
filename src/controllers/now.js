@@ -16,7 +16,7 @@ async function getFirstItem(uw, playlist) {
       const { playlistItem, media } = await uw.playlists.getPlaylistItemAt(playlist, 0);
       return legacyPlaylistItem(playlistItem, media);
     }
-  } catch (e) {
+  } catch {
     // Nothing
   }
   return null;
@@ -68,6 +68,7 @@ async function getState(req) {
   const booth = getBoothData(uw);
   const waitlist = uw.waitlist.getUserIDs();
   const waitlistLocked = uw.waitlist.isLocked();
+  const autoLeave = user != null ? uw.booth.getRemoveAfterCurrentPlay(user) : false;
   let activePlaylist = user?.activePlaylistID
     ? uw.playlists.getUserPlaylist(user, user.activePlaylistID).catch((error) => {
       // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
@@ -96,6 +97,7 @@ async function getState(req) {
     booth,
     waitlist,
     waitlistLocked,
+    autoLeave,
     activePlaylist: activePlaylist.then((playlist) => playlist?.id ?? null),
     firstActivePlaylistItem,
     playlists,

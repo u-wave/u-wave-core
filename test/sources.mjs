@@ -39,7 +39,7 @@ describe('Media Sources', () => {
     return {
       name: 'test-source',
       search,
-      get: get, // eslint-disable-line object-shorthand
+      get: get,
     };
   }
 
