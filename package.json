@@ -34,7 +34,7 @@
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.2.1",
     "body-parser": "^1.19.0",
-    "cookie": "^0.7.1",
+    "cookie": "^1.0.1",
     "cookie-parser": "^1.4.4",
     "cors": "^2.8.5",
     "escape-string-regexp": "^5.0.0",
