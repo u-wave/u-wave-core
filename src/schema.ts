@@ -1,5 +1,5 @@
 import type { Kysely as KyselyBase, Generated } from 'kysely';
-import type { JsonObject, Tagged } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
+import type { JsonObject, JsonValue, Tagged } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
 
 export type UserID = Tagged<string, 'UserID'>;
 export type MediaID = Tagged<string, 'MediaID'>;
@@ -134,12 +134,18 @@ export interface ConfigurationTable {
   value: JsonObject | null,
 }
 
+export interface KeyvalTable {
+  key: string,
+  value: JsonValue,
+}
+
 export interface MigrationTable {
   name: string,
 }
 
 export interface Database {
   configuration: ConfigurationTable,
+  keyval: KeyvalTable,
   migrations: MigrationTable,
   media: MediaTable,
   users: UserTable,

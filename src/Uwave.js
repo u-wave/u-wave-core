@@ -20,7 +20,7 @@ import acl from './plugins/acl.js';
 import waitlist from './plugins/waitlist.js';
 import passport from './plugins/passport.js';
 import migrations from './plugins/migrations.js';
-import { SqliteDateColumnsPlugin, connect as connectSqlite } from './utils/sqlite.js';
+import { SqliteDateColumnsPlugin, connect as connectSqlite, jsonb } from './utils/sqlite.js';
 
 const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
@@ -179,6 +179,37 @@ class UwaveServer extends EventEmitter {
     boot.onClose(() => Promise.all([
       this.redis.quit(),
     ]));
+
+    class KeyValue {
+      #db;
+
+      /** @param {Kysely<import('./schema.js').Database>} db */
+      constructor(db) {
+        this.#db = db;
+      }
+
+      /** @param {string} key */
+      async get(key, db = this.#db) {
+        const row = await db.selectFrom('keyval')
+          .select('value')
+          .where('key', '=', key)
+          .executeTakeFirst();
+        return row != null ? JSON.parse(/** @type {string} */ (/** @type {unknown} */ (row.value))) : null;
+      }
+
+      /**
+       * @param {string} key
+       * @param {import('type-fest').JsonValue} value
+       */
+      async set(key, value, db = this.#db) {
+        await db.insertInto('keyval')
+          .values({ key, value: jsonb(value) })
+          .onConflict((oc) => oc.column('key').doUpdateSet({ value: jsonb(value) }))
+          .execute();
+      }
+    }
+
+    this.keyv = new KeyValue(this.db);
 
     boot.use(migrations);
     boot.use(configStore);
