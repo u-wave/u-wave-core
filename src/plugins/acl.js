@@ -71,7 +71,6 @@ class Acl {
   async getAllRoles() {
     const { AclRole } = this.#uw.models;
 
-    /** @type {AclRole[]} */
     const roles = await AclRole.find().lean();
     return roles.reduce((map, role) => Object.assign(map, {
       [role._id]: role.roles,
