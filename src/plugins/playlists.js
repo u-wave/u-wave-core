@@ -735,25 +735,25 @@ class PlaylistsRepository {
     const { db } = this.#uw;
 
     await db.transaction().execute(async (tx) => {
-    const rows = await tx.selectFrom('playlists')
-      .innerJoin((eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'), (join) => join)
-      .select('playlistItemIDs.value as itemID')
-      .where('playlists.id', '=', playlist.id)
-      .execute();
+      const rows = await tx.selectFrom('playlists')
+        .innerJoin((eb) => jsonEach(eb.ref('playlists.items')).as('playlistItemIDs'), (join) => join)
+        .select('playlistItemIDs.value as itemID')
+        .where('playlists.id', '=', playlist.id)
+        .execute();
 
-    // Only remove items that are actually in this playlist.
-    const set = new Set(itemIDs);
-    /** @type {PlaylistItemID[]} */
-    const toRemove = [];
-    /** @type {PlaylistItemID[]} */
-    const toKeep = [];
-    rows.forEach(({ itemID }) => {
-      if (set.has(itemID)) {
-        toRemove.push(itemID);
-      } else {
-        toKeep.push(itemID);
-      }
-    });
+      // Only remove items that are actually in this playlist.
+      const set = new Set(itemIDs);
+      /** @type {PlaylistItemID[]} */
+      const toRemove = [];
+      /** @type {PlaylistItemID[]} */
+      const toKeep = [];
+      rows.forEach(({ itemID }) => {
+        if (set.has(itemID)) {
+          toRemove.push(itemID);
+        } else {
+          toKeep.push(itemID);
+        }
+      });
 
       await tx.updateTable('playlists')
         .where('id', '=', playlist.id)

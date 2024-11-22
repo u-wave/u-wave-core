@@ -227,8 +227,7 @@ async function addVote(uw, historyEntryID, userID, direction) {
     .onConflict((oc) => oc
       .columns(['historyEntryID', 'userID'])
       .doUpdateSet({ vote: direction })
-      .where('vote', '!=', direction)
-    )
+      .where('vote', '!=', direction))
     .executeTakeFirst();
 
   if (result != null && result.numInsertedOrUpdatedRows != null && result.numInsertedOrUpdatedRows > 0n) {
