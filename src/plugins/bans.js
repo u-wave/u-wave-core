@@ -102,7 +102,7 @@ class Bans {
       } : null,
       reason: row.reason,
       duration: row.expiresAt != null
-        ? Math.floor((new Date(row.expiresAt).getTime() - new Date(row.createdAt).getTime()) / 1000) * 1000
+        ? Math.floor(row.expiresAt.getTime() / 1_000 - row.createdAt.getTime() / 1_000) * 1_000
         : 0,
       expiresAt: row.expiresAt,
       createdAt: row.createdAt,
@@ -137,12 +137,12 @@ class Bans {
       throw new Error('Ban duration should be at least 0ms.');
     }
 
-    const expiresAt = permanent
-      ? null
-      : new Date(Math.floor(Date.now() / 1000) * 1000 + duration);
+    const createdAt = new Date(Math.floor(Date.now() / 1_000) * 1_000);
+    const expiresAt = permanent ? null : new Date(createdAt.getTime() + duration);
     const ban = {
       userID: user.id,
       moderatorID: moderator.id,
+      createdAt,
       expiresAt,
       reason: reason || null,
     };
@@ -154,7 +154,7 @@ class Bans {
     this.#uw.publish('user:ban', {
       userID: user.id,
       moderatorID: moderator.id,
-      duration: 0,
+      duration,
       expiresAt: ban.expiresAt ? ban.expiresAt.getTime() : null,
       permanent,
     });
