@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import routes from '../routes/chat.js';
+import { now } from '../utils/sqlite.js';
 
 /**
- * @typedef {import('../models/index.js').User} User
- *
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
  * @typedef {object} ChatOptions
  * @prop {number} maxLength
  */
@@ -34,16 +35,20 @@ class Chat {
 
   /**
    * @param {User} user
-   * @param {number} duration
+   * @param {number} duration - Duration in seconds
    * @param {{ moderator: User }} options
    */
   async mute(user, duration, options) {
-    await this.#uw.redis.set(
-      `mute:${user.id}`,
-      options.moderator.id,
-      'PX',
-      duration,
-    );
+    const { db } = this.#uw;
+
+    const expiresAt = new Date(Date.now() + duration * 1000);
+    await db.insertInto('mutes')
+      .values({
+        userID: user.id,
+        moderatorID: options.moderator.id,
+        expiresAt,
+      })
+      .execute();
 
     this.#uw.publish('chat:mute', {
       moderatorID: options.moderator.id,
@@ -57,7 +62,13 @@ class Chat {
    * @param {{ moderator: User }} options
    */
   async unmute(user, options) {
-    await this.#uw.redis.del(`mute:${user.id}`);
+    const { db } = this.#uw;
+
+    await db.updateTable('mutes')
+      .where('userID', '=', user.id)
+      .where('expiresAt', '>', now)
+      .set({ expiresAt: now, updatedAt: now })
+      .execute();
 
     this.#uw.publish('chat:unmute', {
       moderatorID: options.moderator.id,
@@ -67,16 +78,22 @@ class Chat {
 
   /**
    * @param {User} user
-   *
    * @private
    */
-  isMuted(user) {
-    return this.#uw.redis.exists(`mute:${user.id}`);
+  async isMuted(user) {
+    const { db } = this.#uw;
+
+    const mute = await db.selectFrom('mutes')
+      .where('userID', '=', user.id)
+      .where('expiresAt', '>', now)
+      .selectAll()
+      .executeTakeFirst();
+
+    return mute ?? null;
   }
 
   /**
    * @param {string} message
-   *
    * @private
    */
   truncate(message) {
@@ -101,7 +118,7 @@ class Chat {
   }
 
   /**
-   * @param {{ id: string } | { userID: string } | {}} filter
+   * @param {{ id: string } | { userID: UserID } | {}} filter
    * @param {{ moderator: User }} options
    */
   delete(filter, options) {

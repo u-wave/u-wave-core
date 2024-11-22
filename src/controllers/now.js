@@ -1,19 +1,20 @@
-import mongoose from 'mongoose';
 import { getBoothData } from './booth.js';
 import { serializePlaylist, serializeUser } from '../utils/serialize.js';
+import { legacyPlaylistItem } from './playlists.js';
 
-const { ObjectId } = mongoose.mongo;
+/**
+ * @typedef {import('../schema.js').UserID} UserID
+ */
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {Promise<import('../models/index.js').Playlist | null>} activePlaylist
+ * @param {import('../schema.js').Playlist & { size: number }} playlist
  */
-async function getFirstItem(uw, activePlaylist) {
+async function getFirstItem(uw, playlist) {
   try {
-    const playlist = await activePlaylist;
-    if (playlist && playlist.size > 0) {
-      const item = await uw.playlists.getPlaylistItem(playlist, playlist.media[0]);
-      return item;
+    if (playlist.size > 0) {
+      const { playlistItem, media } = await uw.playlists.getPlaylistItemAt(playlist, 0);
+      return legacyPlaylistItem(playlistItem, media);
     }
   } catch {
     // Nothing
@@ -34,21 +35,12 @@ function toInt(str) {
  * @param {import('../Uwave.js').default} uw
  */
 async function getOnlineUsers(uw) {
-  const { User } = uw.models;
+  const userIDs = /** @type {UserID[]} */ (await uw.redis.lrange('users', 0, -1));
+  if (userIDs.length === 0) {
+    return [];
+  }
 
-  const userIDs = await uw.redis.lrange('users', 0, -1);
-  /** @type {Omit<import('../models/User.js').LeanUser, 'activePlaylist' | 'exiled' | 'level'>[]} */
-  const users = await User.find({
-    _id: {
-      $in: userIDs.map((id) => new ObjectId(id)),
-    },
-  }).select({
-    activePlaylist: 0,
-    exiled: 0,
-    level: 0,
-    __v: 0,
-  }).lean();
-
+  const users = await uw.users.getUsersByIds(userIDs);
   return users.map(serializeUser);
 }
 
@@ -77,30 +69,26 @@ async function getState(req) {
   const waitlist = uw.waitlist.getUserIDs();
   const waitlistLocked = uw.waitlist.isLocked();
   const autoLeave = user != null ? uw.booth.getRemoveAfterCurrentPlay(user) : false;
-  let activePlaylist = user?.activePlaylist
-    ? uw.playlists.getUserPlaylist(user, user.activePlaylist)
-    : null;
+  let activePlaylist = user?.activePlaylistID
+    ? uw.playlists.getUserPlaylist(user, user.activePlaylistID).catch((error) => {
+      // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
+      // playlist should never be listed as the active playlist. Most likely this is not the
+      // user's fault, so we should not error out on `/api/now`. Instead, pretend they don't have
+      // an active playlist at all. Clients can then let them select a new playlist to activate.
+      if (error.code === 'NOT_FOUND' || error.code === 'playlist-not-found') {
+        req.log.warn('The active playlist does not exist', { error });
+        return null;
+      }
+      throw error;
+    })
+    : Promise.resolve(null);
   const playlists = user ? uw.playlists.getUserPlaylists(user) : null;
-  const firstActivePlaylistItem = activePlaylist ? getFirstItem(uw, activePlaylist) : null;
+  const firstActivePlaylistItem = activePlaylist.then((playlist) => (
+    playlist != null ? getFirstItem(uw, playlist) : null
+  ));
   const socketToken = user ? authRegistry.createAuthToken(user) : null;
   const authStrategies = passport.strategies();
   const time = Date.now();
-
-  if (activePlaylist != null) {
-    activePlaylist = activePlaylist
-      .then((playlist) => playlist?.id)
-      .catch((error) => {
-        // If the playlist was not found, our database is inconsistent. A deleted or nonexistent
-        // playlist should never be listed as the active playlist. Most likely this is not the
-        // user's fault, so we should not error out on `/api/now`. Instead, pretend they don't have
-        // an active playlist at all. Clients can then let them select a new playlist to activate.
-        if (error.code === 'NOT_FOUND' || error.code === 'playlist-not-found') {
-          req.log.warn('The active playlist does not exist', { error });
-          return null;
-        }
-        throw error;
-      });
-  }
 
   const stateShape = {
     motd,
@@ -112,7 +100,7 @@ async function getState(req) {
     waitlist,
     waitlistLocked,
     autoLeave,
-    activePlaylist,
+    activePlaylist: activePlaylist.then((playlist) => playlist?.id ?? null),
     firstActivePlaylistItem,
     playlists,
     socketToken,
@@ -135,6 +123,13 @@ async function getState(req) {
 
   if (state.playlists) {
     state.playlists = state.playlists.map(serializePlaylist);
+  }
+
+  for (const permission of Object.values(state.roles).flat()) {
+    // Web client expects all permissions to be roles too.
+    // This isn't how it works since #637.
+    // Clients can still distinguish between roles and permissions using `.includes('.')`
+    state.roles[permission] ??= [];
   }
 
   return state;

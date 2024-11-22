@@ -6,43 +6,37 @@ import { Umzug } from 'umzug';
  * @typedef {import('../Uwave.js').default} Uwave
  */
 
-/**
- * Custom MongoDBStorage based on Mongoose and with timestamps.
- */
-const mongooseStorage = {
+const kyselyStorage = {
   /**
    * @param {import('umzug').MigrationParams<Uwave>} params
    */
   async logMigration({ name, context: uw }) {
-    const { Migration } = uw.models;
+    const { db } = uw;
 
-    await Migration.create({
-      migrationName: name,
-    });
+    await db.insertInto('migrations')
+      .values({ name })
+      .execute();
   },
 
   /**
    * @param {import('umzug').MigrationParams<Uwave>} params
    */
   async unlogMigration({ name, context: uw }) {
-    const { Migration } = uw.models;
+    const { db } = uw;
 
-    await Migration.deleteOne({
-      migrationName: name,
-    });
+    await db.deleteFrom('migrations')
+      .where('name', '=', name)
+      .execute();
   },
 
   /**
    * @param {{ context: Uwave }} params
    */
   async executed({ context: uw }) {
-    const { Migration } = uw.models;
+    const { db } = uw;
+    const rows = await db.selectFrom('migrations').select(['name']).execute();
 
-    /** @type {{ migrationName: string }[]} */
-    const documents = await Migration.find({})
-      .select({ migrationName: 1 })
-      .lean();
-    return documents.map((doc) => doc.migrationName);
+    return rows.map((row) => row.name);
   },
 };
 
@@ -55,14 +49,20 @@ const mongooseStorage = {
  * @param {Uwave} uw
  */
 async function migrationsPlugin(uw) {
+  const { schema } = uw.db;
   const redLock = new RedLock([uw.redis]);
+
+  schema.createTable('migrations')
+    .ifNotExists()
+    .addColumn('name', 'text', (col) => col.notNull().unique())
+    .execute();
 
   /** @type {Migrate} */
   async function migrate(migrations) {
     const migrator = new Umzug({
       migrations,
       context: uw,
-      storage: mongooseStorage,
+      storage: kyselyStorage,
       logger: uw.logger.child({ ns: 'uwave:migrations' }),
     });
 
@@ -72,9 +72,14 @@ async function migrationsPlugin(uw) {
   }
   uw.migrate = migrate;
 
-  await uw.migrate({
-    glob: ['*.cjs', { cwd: fileURLToPath(new URL('../migrations', import.meta.url)) }],
-  });
+  try {
+    await uw.migrate({
+      glob: ['*.cjs', { cwd: fileURLToPath(new URL('../migrations', import.meta.url)) }],
+    });
+  } catch (err) {
+    if (err.migration) err.migration.context = null;
+    throw err;
+  }
 }
 
 export default migrationsPlugin;

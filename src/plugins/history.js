@@ -6,16 +6,117 @@ const { clamp } = lodash;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
+/** @typedef {import('../schema.js').Database} Database */
+
+const historyEntrySelection = /** @type {const} */ ([
+  'historyEntries.id',
+  'historyEntries.artist',
+  'historyEntries.title',
+  'historyEntries.start',
+  'historyEntries.end',
+  'historyEntries.sourceData',
+  'historyEntries.createdAt as playedAt',
+  'users.id as user.id',
+  'users.username as user.username',
+  'users.slug as user.slug',
+  'users.createdAt as user.createdAt',
+  'media.id as media.id',
+  'media.artist as media.artist',
+  'media.title as media.title',
+  'media.thumbnail as media.thumbnail',
+  'media.duration as media.duration',
+  'media.sourceType as media.sourceType',
+  'media.sourceID as media.sourceID',
+  'media.sourceData as media.sourceData',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('vote', '=', 1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('upvotes'),
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('vote', '=', -1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('downvotes'),
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => eb.selectFrom('feedback')
+    .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+    .where('favorite', '=', 1)
+    .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+    .as('favorites'),
+]);
+
 /**
- * @typedef {import('../models/History.js').HistoryMedia} HistoryMedia
- * @typedef {import('../models/index.js').HistoryEntry} HistoryEntry
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Media} Media
- * @typedef {{ media: Media }} PopulateMedia
- * @typedef {{ user: User }} PopulateUser
- * @typedef {HistoryMedia & PopulateMedia} PopulatedHistoryMedia
- * @typedef {{ media: PopulatedHistoryMedia }} PopulateHistoryMedia
- * @typedef {HistoryEntry & PopulateUser & PopulateHistoryMedia} PopulatedHistoryEntry
+ * @param {{
+ *   id: HistoryEntryID,
+ *   artist: string,
+ *   title: string,
+ *   start: number,
+ *   end: number,
+ *   sourceData: import('type-fest').JsonObject | null,
+ *   playedAt: Date,
+ *   'user.id': UserID,
+ *   'user.username': string,
+ *   'user.slug': string,
+ *   'user.createdAt': Date,
+ *   'media.id': MediaID,
+ *   'media.sourceType': string,
+ *   'media.sourceID': string,
+ *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.artist': string,
+ *   'media.title': string,
+ *   'media.thumbnail': string,
+ *   'media.duration': number,
+ *   upvotes: string,
+ *   downvotes: string,
+ *   favorites: string,
+ * }} row
+ */
+function historyEntryFromRow(row) {
+  return {
+    _id: row.id,
+    playedAt: row.playedAt,
+    user: {
+      _id: row['user.id'],
+      username: row['user.username'],
+      slug: row['user.slug'],
+      createdAt: row['user.createdAt'],
+    },
+    media: {
+      artist: row.artist,
+      title: row.title,
+      start: row.start,
+      end: row.end,
+      sourceData: row.sourceData,
+      media: {
+        _id: row['media.id'],
+        sourceType: row['media.sourceType'],
+        sourceID: row['media.sourceID'],
+        sourceData: row['media.sourceData'],
+        artist: row['media.artist'],
+        title: row['media.title'],
+        thumbnail: row['media.thumbnail'],
+        duration: row['media.duration'],
+      },
+    },
+    /** @type {UserID[]} */
+    upvotes: JSON.parse(row.upvotes),
+    /** @type {UserID[]} */
+    downvotes: JSON.parse(row.downvotes),
+    /** @type {UserID[]} */
+    favorites: JSON.parse(row.favorites),
+  };
+}
+
+/**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').MediaID} MediaID
+ * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
+ * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').Media} Media
  */
 
 class HistoryRepository {
@@ -28,13 +129,26 @@ class HistoryRepository {
     this.#uw = uw;
   }
 
+  /** @param {HistoryEntryID} id */
+  async getEntry(id) {
+    const { db } = this.#uw;
+
+    const row = await db.selectFrom('historyEntries')
+      .innerJoin('users', 'historyEntries.userID', 'users.id')
+      .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .select(historyEntrySelection)
+      .where('historyEntries.id', '=', id)
+      .executeTakeFirst();
+
+    return row != null ? historyEntryFromRow(row) : null;
+  }
+
   /**
-   * @param {object|null} filter
    * @param {{ offset?: number, limit?: number }} [pagination]
-   * @returns {Promise<Page<PopulatedHistoryEntry, { offset: number, limit: number }>>}
+   * @param {{ user?: UserID }} [options]
    */
-  async getHistory(filter, pagination = {}) {
-    const { HistoryEntry } = this.#uw.models;
+  async getHistory(pagination = {}, options = {}) {
+    const { db } = this.#uw;
 
     const offset = pagination.offset ?? 0;
     const limit = clamp(
@@ -43,47 +157,27 @@ class HistoryRepository {
       MAX_PAGE_SIZE,
     );
 
-    const total = filter != null
-      ? await HistoryEntry.where(filter).countDocuments()
-      : await HistoryEntry.estimatedDocumentCount();
-    /** @type {import('mongoose').PipelineStage[]} */
-    const aggregate = [];
-    if (filter != null) {
-      aggregate.push({ $match: filter });
+    let query = db.selectFrom('historyEntries');
+    if (options.user) {
+      query = query.where('userID', '=', options.user);
     }
-    aggregate.push(
-      { $sort: { playedAt: -1 } },
-      { $skip: offset },
-      { $limit: limit },
-      {
-        $lookup: {
-          from: 'media',
-          localField: 'media.media',
-          foreignField: '_id',
-          as: 'media.media',
-        },
-      },
-      { $unwind: '$media.media' },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'user',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      { $project: { __v: 0, 'media.media.__v': 0, 'user.__v': 0 } },
-    );
-    const query = HistoryEntry.aggregate(aggregate);
 
-    /** @type {PopulatedHistoryEntry[]} */
-    const results = /** @type {any} */ (await query);
+    const total = await query.select((eb) => eb.fn.countAll().as('count')).executeTakeFirstOrThrow();
+    const rows = await query
+      .innerJoin('users', 'historyEntries.userID', 'users.id')
+      .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .select(historyEntrySelection)
+      .orderBy('historyEntries.createdAt', 'desc')
+      .offset(offset)
+      .limit(limit)
+      .execute();
 
-    return new Page(results, {
+    const historyEntries = rows.map(historyEntryFromRow);
+
+    return new Page(historyEntries, {
       pageSize: pagination ? pagination.limit : undefined,
-      filtered: total,
-      total,
+      filtered: Number(total),
+      total: Number(total),
       current: { offset, limit },
       next: pagination ? { offset: offset + limit, limit } : undefined,
       previous: offset > 0
@@ -96,7 +190,7 @@ class HistoryRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   getRoomHistory(pagination = {}) {
-    return this.getHistory(null, pagination);
+    return this.getHistory(pagination, {});
   }
 
   /**
@@ -104,7 +198,7 @@ class HistoryRepository {
    * @param {{ offset?: number, limit?: number }} [pagination]
    */
   getUserHistory(user, pagination = {}) {
-    return this.getHistory({ user: user._id }, pagination);
+    return this.getHistory(pagination, { user: user.id });
   }
 }
 

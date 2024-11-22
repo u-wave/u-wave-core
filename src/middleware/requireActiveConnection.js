@@ -6,7 +6,7 @@ const { BadRequest } = httpErrors;
 function requireActiveConnection() {
   /**
    * @param {import('../Uwave.js').default} uwave
-   * @param {import('../models/index.js').User} user
+   * @param {import('../schema.js').User} user
    */
   async function isConnected(uwave, user) {
     const onlineIDs = await uwave.redis.lrange('users', 0, -1);

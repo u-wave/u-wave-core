@@ -20,13 +20,8 @@ describe('Bans', () => {
       assert.strictEqual(await uw.bans.isBanned(user), false);
     });
     it('returns true for banned users', async () => {
-      user.banned = {
-        duration: 1000,
-        expiresAt: Date.now() + 1000,
-      };
-      await user.save();
-      // refresh user data
-      user = await uw.users.getUser(user.id);
+      const moderator = await uw.test.createUser();
+      await uw.bans.ban(user, { moderator, permanent: true, duration: 0 });
       assert.strictEqual(await uw.bans.isBanned(user), true);
     });
   });
@@ -39,13 +34,9 @@ describe('Bans', () => {
         moderator,
         duration: ms('10 hours'),
       });
-      // refresh user data
-      user = await uw.users.getUser(user.id);
       assert.strictEqual(await uw.bans.isBanned(user), true);
 
-      await uw.bans.unban(user, { moderator });
-      // refresh user data
-      user = await uw.users.getUser(user.id);
+      await uw.bans.unban(user.id, { moderator });
       assert.strictEqual(await uw.bans.isBanned(user), false);
     });
   });
@@ -59,13 +50,14 @@ describe('Bans', () => {
 
     it('requires the users.bans.list role', async () => {
       const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('testBans', ['users.bans.list']);
 
       await supertest(uw.server)
         .get('/api/bans')
         .set('Cookie', `uwsession=${token}`)
         .expect(403);
 
-      await uw.acl.allow(user, ['users.bans.list']);
+      await uw.acl.allow(user, ['testBans']);
 
       await supertest(uw.server)
         .get('/api/bans')
@@ -75,7 +67,8 @@ describe('Bans', () => {
 
     it('returns bans', async () => {
       const token = await uw.test.createTestSessionToken(user);
-      await uw.acl.allow(user, ['users.bans.list', 'users.bans.add']);
+      await uw.acl.createRole('testBans', ['users.bans.list', 'users.bans.add']);
+      await uw.acl.allow(user, ['testBans']);
 
       const bannedUser = await uw.test.createUser();
       await uw.bans.ban(bannedUser, {
@@ -91,7 +84,7 @@ describe('Bans', () => {
 
       assert.strictEqual(res.body.meta.results, 1);
       sinon.assert.match(res.body.data[0], {
-        duration: 36000000,
+        duration: ms('10 hours'),
         expiresAt: sinon.match.string,
         reason: 'just to test',
         moderator: user.id,

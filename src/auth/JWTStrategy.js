@@ -3,7 +3,10 @@ import { Strategy } from 'passport';
 import jwt from 'jsonwebtoken';
 import { BannedError } from '../errors/index.js';
 
-/** @typedef {import('../models/index.js').User} User */
+/**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
+ */
 
 /**
  * @param {Record<string, string>} cookies
@@ -34,7 +37,7 @@ function getHeaderToken(headers) {
 
 /**
  * @param {unknown} obj
- * @returns {obj is { id: string }}
+ * @returns {obj is { id: UserID }}
  */
 function isUserIDToken(obj) {
   return typeof obj === 'object'
@@ -43,7 +46,7 @@ function isUserIDToken(obj) {
     && typeof obj.id === 'string';
 }
 
-/** @typedef {(claim: { id: string }) => Promise<User|null>} GetUserFn */
+/** @typedef {(claim: { id: UserID }) => Promise<User|null>} GetUserFn */
 
 class JWTStrategy extends Strategy {
   /**

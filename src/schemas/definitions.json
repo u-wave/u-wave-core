@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$id": "https://ns.u-wave.net/schemas/definitions.json#",
   "definitions": {
-    "ObjectID": {
+    "UUID": {
       "type": "string",
-      "pattern": "^[0-9a-f]{24}$"
+      "pattern": "^[0-9a-f-]{36}$"
     },
     "Username": {
       "type": "string",

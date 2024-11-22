@@ -4,6 +4,7 @@ import supertest from 'supertest';
 import * as sinon from 'sinon';
 import randomString from 'random-string';
 import createUwave from './utils/createUwave.mjs';
+import testSource from './utils/testSource.mjs';
 
 function assertItemsAndIncludedMedia(body) {
   for (const item of body.data) {
@@ -39,21 +40,7 @@ describe('Playlists', () => {
     uw = await createUwave('acl');
     user = await uw.test.createUser();
 
-    uw.source({
-      name: 'test-source',
-      api: 2,
-      async get(context, ids) {
-        return ids.map((id) => ({
-          sourceID: id,
-          artist: `artist ${id}`,
-          title: `title ${id}`,
-          duration: 60,
-        }));
-      },
-      async search() {
-        throw new Error('unimplemented');
-      },
-    });
+    uw.source(testSource);
   });
   afterEach(async () => {
     await uw.destroy();
@@ -179,7 +166,7 @@ describe('Playlists', () => {
 
   describe('PATCH /playlists/:id', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .patch(`/api/playlists/${fakeID}`)
@@ -187,7 +174,7 @@ describe('Playlists', () => {
     });
 
     it('validates input', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
       const token = await uw.test.createTestSessionToken(user);
 
       await supertest(uw.server)
@@ -255,7 +242,7 @@ describe('Playlists', () => {
 
   describe('PUT /playlists/:id/rename', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .put(`/api/playlists/${fakeID}/rename`)
@@ -263,7 +250,7 @@ describe('Playlists', () => {
     });
 
     it('validates input', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
       const token = await uw.test.createTestSessionToken(user);
 
       await supertest(uw.server)
@@ -325,7 +312,7 @@ describe('Playlists', () => {
 
   describe('PUT /playlists/:id/activate', () => {
     it('requires authentication', async () => {
-      const fakeID = '603e43b12d46ab05a8946a23';
+      const fakeID = 'e2c85d94-344b-4c2a-86bd-95edb939f3e6';
 
       await supertest(uw.server)
         .put(`/api/playlists/${fakeID}/activate`)
@@ -367,7 +354,7 @@ describe('Playlists', () => {
   describe('GET /playlists/:id/media', () => {
     let playlist;
     beforeEach(async () => {
-      playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const items = await generateItems(200);
       await uw.playlists.addPlaylistItems(playlist, items);
     });
@@ -500,7 +487,7 @@ describe('Playlists', () => {
   describe('POST /playlists/:id/media', () => {
     let playlist;
     beforeEach(async () => {
-      playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
     });
 
     it('requires authentication', async () => {
@@ -646,7 +633,7 @@ describe('Playlists', () => {
       const res2 = await supertest(uw.server)
         .post(`/api/playlists/${playlist.id}/media`)
         .set('Cookie', `uwsession=${token}`)
-        .send({ items: insertItems, after: middleItem._id })
+        .send({ items: insertItems, after: middleItem.id })
         .expect(200);
 
       sinon.assert.match(res2.body.meta, {
@@ -662,7 +649,7 @@ describe('Playlists', () => {
     let playlist;
     let playlistItems;
     beforeEach(async () => {
-      playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       const { added } = await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
       playlistItems = added;
@@ -774,9 +761,9 @@ describe('Playlists', () => {
 
       const realItems = playlistItems.slice(15).map((item) => item.id);
       const itemsToMove = [
-        '604cee7e2d46ab05a8947ce2',
+        'c41f017d-d2a7-494f-8818-ebc0d02fa935',
         ...realItems,
-        '56fb09bd2268cb6678186df3',
+        'c7b20249-414f-4b6e-838c-d8588b10ab98',
       ];
 
       await supertest(uw.server)
@@ -800,7 +787,7 @@ describe('Playlists', () => {
   describe('POST /playlists/:id/shuffle', () => {
     let playlist;
     beforeEach(async () => {
-      playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
     });
@@ -837,7 +824,7 @@ describe('Playlists', () => {
     let playlist;
     let playlistItems;
     beforeEach(async () => {
-      playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      ({ playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' }));
       const insertItems = await generateItems(20);
       const { added } = await uw.playlists.addPlaylistItems(playlist, insertItems, { at: 'start' });
       playlistItems = added;
@@ -913,9 +900,9 @@ describe('Playlists', () => {
 
       const realItems = playlistItems.slice(15).map((item) => item.id);
       const itemsToRemove = [
-        '604cee7e2d46ab05a8947ce2',
+        'ee5cf93f-592b-4d17-bc8a-3ef99fd2a37d',
         ...realItems,
-        '56fb09bd2268cb6678186df3',
+        'a50f21ef-cfbd-484c-bf13-77b3ff0d664c',
       ];
 
       await supertest(uw.server)

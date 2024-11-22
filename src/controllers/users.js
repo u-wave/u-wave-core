@@ -13,6 +13,10 @@ import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import { muteUser, unmuteUser } from './chat.js';
 
 /**
+ * @typedef {import('../schema').UserID} UserID
+ */
+
+/**
  * @typedef {object} GetUsersQuery
  * @prop {string} filter
  */
@@ -36,7 +40,7 @@ async function getUsers(req) {
 
 /**
  * @typedef {object} GetUserParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**
@@ -58,7 +62,7 @@ async function getUser(req) {
 
 /**
  * @typedef {object} GetUserRolesParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**
@@ -82,7 +86,7 @@ async function getUserRoles(req) {
 
 /**
  * @typedef {object} AddUserRoleParams
- * @prop {string} id
+ * @prop {UserID} id
  * @prop {string} role
  */
 
@@ -94,7 +98,7 @@ async function addUserRole(req) {
   const { id, role } = req.params;
   const { acl, users } = req.uwave;
 
-  const selfHasRole = await acl.isAllowed(moderator, role);
+  const selfHasRole = moderator.roles.includes('*') || moderator.roles.includes(role);
   if (!selfHasRole) {
     throw new PermissionError({ requiredRole: role });
   }
@@ -113,7 +117,7 @@ async function addUserRole(req) {
 
 /**
  * @typedef {object} RemoveUserRoleParams
- * @prop {string} id
+ * @prop {UserID} id
  * @prop {string} role
  */
 
@@ -125,7 +129,7 @@ async function removeUserRole(req) {
   const { id, role } = req.params;
   const { acl, users } = req.uwave;
 
-  const selfHasRole = await acl.isAllowed(moderator, role);
+  const selfHasRole = moderator.roles.includes('*') || moderator.roles.includes(role);
   if (!selfHasRole) {
     throw new PermissionError({ requiredRole: role });
   }
@@ -144,8 +148,7 @@ async function removeUserRole(req) {
 
 /**
  * @typedef {object} ChangeUsernameParams
- * @prop {string} id
- *
+ * @prop {UserID} id
  * @typedef {object} ChangeUsernameBody
  * @prop {string} username
  */
@@ -182,7 +185,7 @@ async function changeAvatar() {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {import('mongodb').ObjectId} userID
+ * @param {UserID} userID
  */
 async function disconnectUser(uw, userID) {
   await skipIfCurrentDJ(uw, userID);
@@ -193,14 +196,14 @@ async function disconnectUser(uw, userID) {
     // Ignore
   }
 
-  await uw.redis.lrem('users', 0, userID.toString());
+  await uw.redis.lrem('users', 0, userID);
 
-  uw.publish('user:leave', { userID: userID.toString() });
+  uw.publish('user:leave', { userID });
 }
 
 /**
  * @typedef {object} GetHistoryParams
- * @prop {string} id
+ * @prop {UserID} id
  */
 
 /**

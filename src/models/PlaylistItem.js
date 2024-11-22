@@ -13,7 +13,6 @@ const { Types } = mongoose.Schema;
  * @prop {number} end
  * @prop {Date} createdAt
  * @prop {Date} updatedAt
- *
  * @typedef {mongoose.Document<LeanPlaylistItem["_id"], {}, LeanPlaylistItem> &
  *           LeanPlaylistItem} PlaylistItem
  */

@@ -6,7 +6,6 @@ const { Schema } = mongoose;
  * @typedef {object} LeanAclRole
  * @prop {string} _id
  * @prop {string[]} roles
- *
  * @typedef {mongoose.Document<LeanAclRole["_id"], {}, LeanAclRole> & LeanAclRole} AclRole
  */
 

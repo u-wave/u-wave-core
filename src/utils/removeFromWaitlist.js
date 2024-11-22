@@ -1,22 +1,14 @@
 /**
  * @param {import('../Uwave.js').default} uw
- */
-function getWaitingUserIDs(uw) {
-  return uw.redis.lrange('waitlist', 0, -1);
-}
-
-/**
- * @param {import('../Uwave.js').default} uw
- * @param {import('mongodb').ObjectId} userID
+ * @param {import('../schema.js').UserID} userID
  */
 async function removeFromWaitlist(uw, userID) {
-  const id = userID.toString();
-  const waitingIDs = await getWaitingUserIDs(uw);
-  if (waitingIDs.includes(id)) {
-    await uw.redis.lrem('waitlist', 0, id);
+  const waitingIDs = await uw.waitlist.getUserIDs();
+  if (waitingIDs.includes(userID)) {
+    await uw.redis.lrem('waitlist', 0, userID);
     uw.publish('waitlist:leave', {
-      userID: id,
-      waitlist: await getWaitingUserIDs(uw),
+      userID,
+      waitlist: await uw.waitlist.getUserIDs(),
     });
   }
 }

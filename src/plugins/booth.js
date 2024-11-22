@@ -1,33 +1,24 @@
-import assert from 'node:assert';
 import RedLock from 'redlock';
-import lodash from 'lodash';
 import { EmptyPlaylistError, PlaylistItemNotFoundError } from '../errors/index.js';
 import routes from '../routes/booth.js';
-
-const { omit } = lodash;
+import { randomUUID } from 'node:crypto';
+import { jsonb } from '../utils/sqlite.js';
 
 /**
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').HistoryEntryID} HistoryEntryID
  * @typedef {import('type-fest').JsonObject} JsonObject
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Playlist} Playlist
- * @typedef {import('../models/index.js').PlaylistItem} PlaylistItem
- * @typedef {import('../models/index.js').HistoryEntry} HistoryEntry
- * @typedef {import('../models/History.js').HistoryMedia} HistoryMedia
- * @typedef {import('../models/index.js').Media} Media
- * @typedef {{ user: User }} PopulateUser
- * @typedef {{ playlist: Playlist }} PopulatePlaylist
- * @typedef {{ media: Omit<HistoryMedia, 'media'> & { media: Media } }} PopulateMedia
- * @typedef {Omit<HistoryEntry, 'user' | 'playlist' | 'media'>
- *     & PopulateUser & PopulatePlaylist & PopulateMedia} PopulatedHistoryEntry
+ * @typedef {import('../schema.js').User} User
+ * @typedef {import('../schema.js').Playlist} Playlist
+ * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
+ * @typedef {import('../schema.js').HistoryEntry} HistoryEntry
+ * @typedef {Omit<import('../schema.js').Media, 'createdAt' | 'updatedAt'>} Media
  */
 
 const REDIS_ADVANCING = 'booth:advancing';
 const REDIS_HISTORY_ID = 'booth:historyID';
 const REDIS_CURRENT_DJ_ID = 'booth:currentDJ';
 const REDIS_REMOVE_AFTER_CURRENT_PLAY = 'booth:removeAfterCurrentPlay';
-const REDIS_UPVOTES = 'booth:upvotes';
-const REDIS_DOWNVOTES = 'booth:downvotes';
-const REDIS_FAVORITES = 'booth:favorites';
 
 const REMOVE_AFTER_CURRENT_PLAY_SCRIPT = {
   keys: [REDIS_CURRENT_DJ_ID, REDIS_REMOVE_AFTER_CURRENT_PLAY],
@@ -50,18 +41,6 @@ const REMOVE_AFTER_CURRENT_PLAY_SCRIPT = {
     end
   `,
 };
-
-/**
- * @param {Playlist} playlist
- * @returns {Promise<void>}
- */
-async function cyclePlaylist(playlist) {
-  const item = playlist.media.shift();
-  if (item !== undefined) {
-    playlist.media.push(item);
-  }
-  await playlist.save();
-}
 
 class Booth {
   #uw;
@@ -96,8 +75,8 @@ class Booth {
     if (current && this.#timeout === null) {
       // Restart the advance timer after a server restart, if a track was
       // playing before the server restarted.
-      const duration = (current.media.end - current.media.start) * 1000;
-      const endTime = Number(current.playedAt) + duration;
+      const duration = (current.historyEntry.end - current.historyEntry.start) * 1000;
+      const endTime = current.historyEntry.createdAt.getTime() + duration;
       if (endTime > Date.now()) {
         this.#timeout = setTimeout(
           () => this.#advanceAutomatically(),
@@ -126,116 +105,143 @@ class Booth {
     this.#maybeStop();
   }
 
-  /**
-   * @returns {Promise<HistoryEntry | null>}
-   */
-  async getCurrentEntry() {
-    const { HistoryEntry } = this.#uw.models;
-    const historyID = await this.#uw.redis.get(REDIS_HISTORY_ID);
+  async getCurrentEntry(tx = this.#uw.db) {
+    const historyID = /** @type {HistoryEntryID} */ (await this.#uw.redis.get(REDIS_HISTORY_ID));
     if (!historyID) {
       return null;
     }
 
-    return HistoryEntry.findById(historyID, '+media.sourceData');
-  }
+    const entry = await tx.selectFrom('historyEntries')
+      .innerJoin('media', 'historyEntries.mediaID', 'media.id')
+      .innerJoin('users', 'historyEntries.userID', 'users.id')
+      .select([
+        'historyEntries.id as id',
+        'media.id as media.id',
+        'media.sourceID as media.sourceID',
+        'media.sourceType as media.sourceType',
+        'media.sourceData as media.sourceData',
+        'media.artist as media.artist',
+        'media.title as media.title',
+        'media.duration as media.duration',
+        'media.thumbnail as media.thumbnail',
+        'users.id as users.id',
+        'users.username as users.username',
+        'users.avatar as users.avatar',
+        'users.createdAt as users.createdAt',
+        'historyEntries.artist',
+        'historyEntries.title',
+        'historyEntries.start',
+        'historyEntries.end',
+        'historyEntries.createdAt',
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('vote', '=', 1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('upvotes'),
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('vote', '=', -1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('downvotes'),
+        (eb) => eb.selectFrom('feedback')
+          .where('historyEntryID', '=', eb.ref('historyEntries.id'))
+          .where('favorite', '=', 1)
+          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .as('favorites'),
+      ])
+      .where('historyEntries.id', '=', historyID)
+      .executeTakeFirst();
 
-  /**
-   * Get vote counts for the currently playing media.
-   *
-   * @returns {Promise<{ upvotes: string[], downvotes: string[], favorites: string[] }>}
-   */
-  async getCurrentVoteStats() {
-    const { redis } = this.#uw;
-
-    const results = await redis.pipeline()
-      .smembers(REDIS_UPVOTES)
-      .smembers(REDIS_DOWNVOTES)
-      .smembers(REDIS_FAVORITES)
-      .exec();
-    assert(results);
-
-    const voteStats = {
-      upvotes: /** @type {string[]} */ (results[0][1]),
-      downvotes: /** @type {string[]} */ (results[1][1]),
-      favorites: /** @type {string[]} */ (results[2][1]),
-    };
-
-    return voteStats;
-  }
-
-  /**
-   * @param {HistoryEntry} entry
-   */
-  async #saveStats(entry) {
-    const stats = await this.getCurrentVoteStats();
-
-    Object.assign(entry, stats);
-    return entry.save();
+    return entry ? {
+      media: {
+        id: entry['media.id'],
+        artist: entry['media.artist'],
+        title: entry['media.title'],
+        duration: entry['media.duration'],
+        thumbnail: entry['media.thumbnail'],
+        sourceID: entry['media.sourceID'],
+        sourceType: entry['media.sourceType'],
+        sourceData: entry['media.sourceData'] ?? {},
+      },
+      user: {
+        id: entry['users.id'],
+        username: entry['users.username'],
+        avatar: entry['users.avatar'],
+        createdAt: entry['users.createdAt'],
+      },
+      historyEntry: {
+        id: entry.id,
+        userID: entry['users.id'],
+        mediaID: entry['media.id'],
+        artist: entry.artist,
+        title: entry.title,
+        start: entry.start,
+        end: entry.end,
+        createdAt: entry.createdAt,
+      },
+      upvotes: /** @type {UserID[]} */ (JSON.parse(entry.upvotes)),
+      downvotes: /** @type {UserID[]} */ (JSON.parse(entry.downvotes)),
+      favorites: /** @type {UserID[]} */ (JSON.parse(entry.favorites)),
+    } : null;
   }
 
   /**
    * @param {{ remove?: boolean }} options
-   * @returns {Promise<User|null>}
    */
-  async #getNextDJ(options) {
-    const { User } = this.#uw.models;
-    /** @type {string|null} */
-    let userID = await this.#uw.redis.lindex('waitlist', 0);
+  async #getNextDJ(options, tx = this.#uw.db) {
+    let userID = /** @type {UserID|null} */ (await this.#uw.redis.lindex('waitlist', 0));
     if (!userID && !options.remove) {
       // If the waitlist is empty, the current DJ will play again immediately.
-      userID = await this.#uw.redis.get(REDIS_CURRENT_DJ_ID);
+      userID = /** @type {UserID|null} */ (await this.#uw.redis.get(REDIS_CURRENT_DJ_ID));
     }
     if (!userID) {
       return null;
     }
 
-    return User.findById(userID);
+    return this.#uw.users.getUser(userID, tx);
   }
 
   /**
    * @param {{ remove?: boolean }} options
-   * @returns {Promise<PopulatedHistoryEntry | null>}
    */
   async #getNextEntry(options) {
-    const { HistoryEntry, PlaylistItem } = this.#uw.models;
     const { playlists } = this.#uw;
 
     const user = await this.#getNextDJ(options);
-    if (!user || !user.activePlaylist) {
+    if (!user || !user.activePlaylistID) {
       return null;
     }
-    const playlist = await playlists.getUserPlaylist(user, user.activePlaylist);
+    const playlist = await playlists.getUserPlaylist(user, user.activePlaylistID);
     if (playlist.size === 0) {
       throw new EmptyPlaylistError();
     }
 
-    const playlistItem = await PlaylistItem.findById(playlist.media[0]);
+    const { playlistItem, media } = await playlists.getPlaylistItemAt(playlist, 0);
     if (!playlistItem) {
-      throw new PlaylistItemNotFoundError({ id: playlist.media[0] });
+      throw new PlaylistItemNotFoundError();
     }
 
-    /** @type {PopulatedHistoryEntry} */
-    // @ts-expect-error TS2322: `user` and `playlist` are already populated,
-    // and `media.media` is populated immediately below.
-    const entry = new HistoryEntry({
+    return {
       user,
       playlist,
-      item: playlistItem._id,
-      media: {
-        media: playlistItem.media,
+      playlistItem,
+      media,
+      historyEntry: {
+        id: /** @type {HistoryEntryID} */ (randomUUID()),
+        userID: user.id,
+        mediaID: media.id,
         artist: playlistItem.artist,
         title: playlistItem.title,
         start: playlistItem.start,
         end: playlistItem.end,
+        /** @type {null | JsonObject} */
+        sourceData: null,
       },
-    });
-    await entry.populate('media.media');
-
-    return entry;
+    };
   }
 
   /**
-   * @param {HistoryEntry|null} previous
+   * @param {UserID|null} previous
    * @param {{ remove?: boolean }} options
    */
   async #cycleWaitlist(previous, options) {
@@ -245,7 +251,7 @@ class Booth {
       if (previous && !options.remove) {
         // The previous DJ should only be added to the waitlist again if it was
         // not empty. If it was empty, the previous DJ is already in the booth.
-        await this.#uw.redis.rpush('waitlist', previous.user.toString());
+        await this.#uw.redis.rpush('waitlist', previous);
       }
     }
   }
@@ -255,19 +261,16 @@ class Booth {
       REDIS_HISTORY_ID,
       REDIS_CURRENT_DJ_ID,
       REDIS_REMOVE_AFTER_CURRENT_PLAY,
-      REDIS_UPVOTES,
-      REDIS_DOWNVOTES,
-      REDIS_FAVORITES,
     );
   }
 
   /**
-   * @param {PopulatedHistoryEntry} next
+   * @param {{ historyEntry: { id: HistoryEntryID }, user: { id: UserID } }} next
    */
   async #update(next) {
     await this.#uw.redis.multi()
-      .del(REDIS_UPVOTES, REDIS_DOWNVOTES, REDIS_FAVORITES, REDIS_REMOVE_AFTER_CURRENT_PLAY)
-      .set(REDIS_HISTORY_ID, next.id)
+      .del(REDIS_REMOVE_AFTER_CURRENT_PLAY)
+      .set(REDIS_HISTORY_ID, next.historyEntry.id)
       .set(REDIS_CURRENT_DJ_ID, next.user.id)
       .exec();
   }
@@ -280,13 +283,13 @@ class Booth {
   }
 
   /**
-   * @param {PopulatedHistoryEntry} entry
+   * @param {Pick<HistoryEntry, 'start' | 'end'>} entry
    */
   #play(entry) {
     this.#maybeStop();
     this.#timeout = setTimeout(
       () => this.#advanceAutomatically(),
-      (entry.media.end - entry.media.start) * 1000,
+      (entry.end - entry.start) * 1000,
     );
   }
 
@@ -298,35 +301,46 @@ class Booth {
    * a property of the media model for backwards compatibility.
    * Old clients don't expect `sourceData` directly on a history entry object.
    *
-   * @param {PopulateMedia} historyEntry
+   * @param {{ user: User, media: Media, historyEntry: HistoryEntry }} next
    */
-
-  getMediaForPlayback(historyEntry) {
-    return Object.assign(omit(historyEntry.media, 'sourceData'), {
+  getMediaForPlayback(next) {
+    return {
+      artist: next.historyEntry.artist,
+      title: next.historyEntry.title,
+      start: next.historyEntry.start,
+      end: next.historyEntry.end,
       media: {
-        ...historyEntry.media.media.toJSON(),
+        sourceType: next.media.sourceType,
+        sourceID: next.media.sourceID,
+        artist: next.media.artist,
+        title: next.media.title,
+        duration: next.media.duration,
         sourceData: {
-          ...historyEntry.media.media.sourceData,
-          ...historyEntry.media.sourceData,
+          ...next.media.sourceData,
+          ...next.historyEntry.sourceData,
         },
       },
-    });
+    };
   }
 
   /**
-   * @param {PopulatedHistoryEntry|null} next
+   * @param {{
+   *   user: User,
+   *   playlist: Playlist,
+   *   media: Media,
+   *   historyEntry: HistoryEntry
+   * } | null} next
    */
   async #publishAdvanceComplete(next) {
     const { waitlist } = this.#uw;
 
-    if (next) {
+    if (next != null) {
       this.#uw.publish('advance:complete', {
-        historyID: next.id,
+        historyID: next.historyEntry.id,
         userID: next.user.id,
         playlistID: next.playlist.id,
-        itemID: next.item.toString(),
         media: this.getMediaForPlayback(next),
-        playedAt: next.playedAt.getTime(),
+        playedAt: next.historyEntry.createdAt.getTime(),
       });
       this.#uw.publish('playlist:cycle', {
         userID: next.user.id,
@@ -339,17 +353,17 @@ class Booth {
   }
 
   /**
-   * @param {PopulatedHistoryEntry} entry
+   * @param {{ user: User, media: { sourceID: string, sourceType: string } }} entry
    */
   async #getSourceDataForPlayback(entry) {
-    const { sourceID, sourceType } = entry.media.media;
+    const { sourceID, sourceType } = entry.media;
     const source = this.#uw.source(sourceType);
     if (source) {
       this.#logger.trace({ sourceType: source.type, sourceID }, 'running pre-play hook');
       /** @type {JsonObject | undefined} */
       let sourceData;
       try {
-        sourceData = await source.play(entry.user, entry.media.media);
+        sourceData = await source.play(entry.user, entry.media);
         this.#logger.trace({ sourceType: source.type, sourceID, sourceData }, 'pre-play hook result');
       } catch (error) {
         this.#logger.error({ sourceType: source.type, sourceID, err: error }, 'pre-play hook failed');
@@ -365,18 +379,24 @@ class Booth {
    * @prop {boolean} [remove]
    * @prop {boolean} [publish]
    * @prop {import('redlock').RedlockAbortSignal} [signal]
-   *
    * @param {AdvanceOptions} [opts]
-   * @returns {Promise<PopulatedHistoryEntry|null>}
+   * @returns {Promise<{
+   *   historyEntry: HistoryEntry,
+   *   user: User,
+   *   media: Media,
+   *   playlist: Playlist,
+   * }|null>}
    */
-  async #advanceLocked(opts = {}) {
+  async #advanceLocked(opts = {}, tx = this.#uw.db) {
+    const { playlists } = this.#uw;
+
     const publish = opts.publish ?? true;
     const removeAfterCurrent = (await this.#uw.redis.del(REDIS_REMOVE_AFTER_CURRENT_PLAY)) === 1;
     const remove = opts.remove || removeAfterCurrent || (
       !await this.#uw.waitlist.isCycleEnabled()
     );
 
-    const previous = await this.getCurrentEntry();
+    const previous = await this.getCurrentEntry(tx);
     let next;
     try {
       next = await this.#getNextEntry({ remove });
@@ -385,8 +405,9 @@ class Booth {
       // and try advancing again.
       if (err instanceof EmptyPlaylistError) {
         this.#logger.info('user has empty playlist, skipping on to the next');
-        await this.#cycleWaitlist(previous, { remove });
-        return this.#advanceLocked({ publish, remove: true });
+        const previousDJ = previous != null ? previous.historyEntry.userID : null;
+        await this.#cycleWaitlist(previousDJ, { remove });
+        return this.#advanceLocked({ publish, remove: true }, tx);
       }
       throw err;
     }
@@ -396,10 +417,8 @@ class Booth {
     }
 
     if (previous) {
-      await this.#saveStats(previous);
-
       this.#logger.info({
-        id: previous._id,
+        id: previous.historyEntry.id,
         artist: previous.media.artist,
         title: previous.media.title,
         upvotes: previous.upvotes.length,
@@ -408,41 +427,60 @@ class Booth {
       }, 'previous track stats');
     }
 
-    if (next) {
+    let result = null;
+    if (next != null) {
       this.#logger.info({
-        id: next._id,
-        artist: next.media.artist,
-        title: next.media.title,
+        id: next.playlistItem.id,
+        artist: next.playlistItem.artist,
+        title: next.playlistItem.title,
       }, 'next track');
       const sourceData = await this.#getSourceDataForPlayback(next);
       if (sourceData) {
-        next.media.sourceData = sourceData;
+        next.historyEntry.sourceData = sourceData;
       }
-      await next.save();
+      const historyEntry = await tx.insertInto('historyEntries')
+        .returningAll()
+        .values({
+          id: next.historyEntry.id,
+          userID: next.user.id,
+          mediaID: next.media.id,
+          artist: next.historyEntry.artist,
+          title: next.historyEntry.title,
+          start: next.historyEntry.start,
+          end: next.historyEntry.end,
+          sourceData: sourceData != null ? jsonb(sourceData) : null,
+        })
+        .executeTakeFirstOrThrow();
+
+      result = {
+        historyEntry,
+        playlist: next.playlist,
+        user: next.user,
+        media: next.media,
+      };
     } else {
       this.#maybeStop();
     }
 
-    await this.#cycleWaitlist(previous, { remove });
+    await this.#cycleWaitlist(previous != null ? previous.historyEntry.userID : null, { remove });
 
     if (next) {
       await this.#update(next);
-      await cyclePlaylist(next.playlist);
-      this.#play(next);
+      await playlists.cyclePlaylist(next.playlist, tx);
+      this.#play(next.historyEntry);
     } else {
       await this.clear();
     }
 
     if (publish !== false) {
-      await this.#publishAdvanceComplete(next);
+      await this.#publishAdvanceComplete(result);
     }
 
-    return next;
+    return result;
   }
 
   /**
    * @param {AdvanceOptions} [opts]
-   * @returns {Promise<PopulatedHistoryEntry|null>}
    */
   advance(opts = {}) {
     const result = this.#locker.using(
@@ -461,7 +499,7 @@ class Booth {
   async setRemoveAfterCurrentPlay(user, remove) {
     const newValue = await this.#uw.redis['uw:removeAfterCurrentPlay'](
       ...REMOVE_AFTER_CURRENT_PLAY_SCRIPT.keys,
-      user._id.toString(),
+      user.id,
       remove,
     );
     return newValue === 1;

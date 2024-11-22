@@ -15,7 +15,7 @@ class AuthRegistry {
   }
 
   /**
-   * @param {import('./models/index.js').User} user
+   * @param {import('./schema.js').User} user
    */
   async createAuthToken(user) {
     const token = (await randomBytes(64)).toString('hex');
@@ -42,7 +42,7 @@ class AuthRegistry {
       throw err;
     }
 
-    return userID;
+    return /** @type {import('./schema.js').UserID} */ (userID);
   }
 }
 

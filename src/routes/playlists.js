@@ -73,7 +73,8 @@ function playlistRoutes() {
       route(controller.removePlaylistItems),
     )
     // PUT /playlists/:id/move - Move playlist items.
-    // TODO This should probably not be a PUT
+    // TODO This should probably not be a PUT, but a POST
+    // It's not idempotent!
     .put(
       '/:id/move',
       schema(validations.movePlaylistItems),

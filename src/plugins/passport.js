@@ -10,8 +10,8 @@ const schema = JSON.parse(
 );
 
 /**
- * @typedef {import('../models/User.js').User} User
- *
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
  * @typedef {{
  *   callbackURL?: string,
  * } & ({
@@ -21,7 +21,6 @@ const schema = JSON.parse(
  *   clientID: string,
  *   clientSecret: string,
  * })} GoogleOptions
- *
  * @typedef {object} SocialAuthSettings
  * @prop {GoogleOptions} google
  */
@@ -43,17 +42,17 @@ class PassportPlugin extends Passport {
 
     /**
      * @param {Express.User} user
-     * @returns {Promise<string>}
+     * @returns {Promise<UserID>}
      */
     function serializeUser(user) {
-      /** @type {string} */
+      /** @type {UserID} */
       // @ts-expect-error `user` is actually an instance of the User model
       // but we can't express that
       const userID = user.id;
       return Promise.resolve(userID);
     }
     /**
-     * @param {string} id
+     * @param {UserID} id
      * @returns {Promise<User|null>}
      */
     function deserializeUser(id) {
@@ -77,11 +76,11 @@ class PassportPlugin extends Passport {
       passwordField: 'password',
       session: false,
     }, callbackify(localLogin)));
-    this.use('jwt', new JWTStrategy(options.secret, async (user) => {
+    this.use('jwt', new JWTStrategy(options.secret, async (claim) => {
       try {
-        return await uw.users.getUser(user.id);
+        return await uw.users.getUser(claim.id);
       } catch (err) {
-        this.#logger.warn({ err, user }, 'could not load user from JWT');
+        this.#logger.warn({ err, claim }, 'could not load user from JWT');
         return null;
       }
     }));
@@ -109,8 +108,8 @@ class PassportPlugin extends Passport {
   }
 
   /**
-   * @param {string} accessToken
-   * @param {string} refreshToken
+   * @param {string} accessToken Not used as we do not need to access the account.
+   * @param {string} refreshToken Not used as we do not need to access the account.
    * @param {import('passport').Profile} profile
    * @returns {Promise<User>}
    * @private

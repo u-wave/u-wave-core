@@ -61,7 +61,7 @@ class GuestConnection extends EventEmitter {
   }
 
   /**
-   * @param {import('../models/index.js').User} user
+   * @param {import('../schema.js').User} user
    */
   isReconnect(user) {
     return this.uw.redis.exists(`http-api:disconnected:${user.id}`);

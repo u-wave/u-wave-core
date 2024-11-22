@@ -35,19 +35,12 @@ jobs:
     name: Tests
     strategy:
       matrix:
-        node-version: ['18.x', '20.x']
-        mongo-version: ['6.0', '7.0']
-        include:
-          - node-version: 'lts/*'
-            mongo-version: '5.0'
+        node-version: ['18.x', '20.x', '22.x']
     runs-on: ubuntu-latest
     services:
       redis:
         image: redis:6
         ports: ['6379:6379']
-      mongodb:
-        image: mongo:${{matrix.mongo-version}}
-        ports: ['27017:27017']
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -63,7 +56,7 @@ jobs:
           REDIS_URL: '127.0.0.1:6379'
           MONGODB_HOST: '127.0.0.1:27017'
       - name: Submit coverage
-        if: matrix.node-version == '20.x' && matrix.mongo-version == '7.0'
+        if: matrix.node-version == '20.x'
         uses: coverallsapp/github-action@v2.3.1
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}

@@ -27,7 +27,7 @@ describe('Now', () => {
         .set('Cookie', `uwsession=${token}`)
         .expect(200);
 
-      assert.strictEqual(res.body.user._id, user._id.toString());
+      assert.strictEqual(res.body.user._id, user.id);
       assert.strictEqual(res.body.activePlaylist, null);
     });
 

@@ -1,11 +1,11 @@
-import { JsonObject } from 'type-fest'; // eslint-disable-line import/no-unresolved, n/no-missing-import, n/no-unpublished-import
+import type { JsonObject } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
+import type { HistoryEntryID, PlaylistID, UserID } from './schema.js';
 
 export type ServerActionParameters = {
   'advance:complete': {
-    historyID: string,
-    userID: string,
-    playlistID: string,
-    itemID: string,
+    historyID: HistoryEntryID,
+    userID: UserID,
+    playlistID: PlaylistID,
     media: {
       artist: string,
       title: string,
@@ -23,117 +23,117 @@ export type ServerActionParameters = {
   } | null,
 
   'booth:skip': {
-    userID: string,
-    moderatorID: string | null,
+    userID: UserID,
+    moderatorID: UserID | null,
     reason: string | null,
   },
   'booth:replace': {
-    userID: string,
-    moderatorID: string | null,
+    userID: UserID,
+    moderatorID: UserID | null,
   },
 
   'chat:message': {
     id: string,
-    userID: string,
+    userID: UserID,
     message: string,
     timestamp: number,
   },
   'chat:delete': {
-    filter: { id: string } | { userID: string } | Record<string, never>,
-    moderatorID: string,
+    filter: { id: string } | { userID: UserID } | Record<string, never>,
+    moderatorID: UserID | null,
   },
   'chat:mute': {
-    moderatorID: string,
-    userID: string,
+    moderatorID: UserID,
+    userID: UserID,
     duration: number,
   },
   'chat:unmute': {
-    moderatorID: string,
-    userID: string,
+    moderatorID: UserID,
+    userID: UserID,
   },
 
   'configStore:update': {
     key: string,
-    user: string | null,
+    user: UserID | null,
     patch: Record<string, import('type-fest').JsonValue>,
   },
 
   'booth:vote': {
-    userID: string,
+    userID: UserID,
     direction: 1 | -1,
   },
   'booth:favorite': {
-    userID: string,
-    playlistID: string,
+    userID: UserID,
+    playlistID: PlaylistID,
   },
   'playlist:cycle': {
-    userID: string,
-    playlistID: string,
+    userID: UserID,
+    playlistID: PlaylistID,
   },
   'waitlist:join': {
-    userID: string,
-    waitlist: string[],
+    userID: UserID,
+    waitlist: UserID[],
   },
   'waitlist:leave': {
-    userID: string,
-    waitlist: string[],
+    userID: UserID,
+    waitlist: UserID[],
   },
   'waitlist:add': {
-    userID: string,
-    moderatorID: string,
+    userID: UserID,
+    moderatorID: UserID,
     position: number,
-    waitlist: string[],
+    waitlist: UserID[],
   },
   'waitlist:remove': {
-    userID: string,
-    moderatorID: string,
-    waitlist: string[],
+    userID: UserID,
+    moderatorID: UserID,
+    waitlist: UserID[],
   },
   'waitlist:move': {
-    userID: string,
-    moderatorID: string,
+    userID: UserID,
+    moderatorID: UserID,
     position: number,
-    waitlist: string[],
+    waitlist: UserID[],
   },
-  'waitlist:update': string[],
+  'waitlist:update': UserID[],
   'waitlist:clear': {
-    moderatorID: string,
+    moderatorID: UserID,
   },
   'waitlist:lock': {
-    moderatorID: string,
+    moderatorID: UserID,
     locked: boolean,
   },
   'acl:allow': {
-    userID: string,
+    userID: UserID,
     roles: string[],
   },
   'acl:disallow': {
-    userID: string,
+    userID: UserID,
     roles: string[],
   },
   'user:create': {
-    user: string,
+    user: UserID,
     auth: { type: 'local', email: string } | { type: string, id: string },
   },
   'user:update': {
-    userID: string,
-    moderatorID: string,
+    userID: UserID,
+    moderatorID: UserID | null,
     old: Record<string, string>,
     new: Record<string, string>,
   },
-  'user:join': { userID: string },
-  'user:leave': { userID: string },
-  'user:logout': { userID: string },
+  'user:join': { userID: UserID },
+  'user:leave': { userID: UserID },
+  'user:logout': { userID: UserID },
   'user:ban': {
-    userID: string,
-    moderatorID: string,
+    userID: UserID,
+    moderatorID: UserID,
     permanent?: boolean,
     duration: number | null,
     expiresAt: number | null,
   },
   'user:unban': {
-    userID: string,
-    moderatorID: string,
+    userID: UserID,
+    moderatorID: UserID,
   },
   'http-api:socket:close': string,
 

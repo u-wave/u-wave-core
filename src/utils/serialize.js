@@ -1,36 +1,89 @@
 /**
- * @typedef {import('../models/index.js').User} User
- * @typedef {import('../models/index.js').Playlist} Playlist
- * @typedef {import('../models/Playlist.js').LeanPlaylist} LeanPlaylist
- */
-
-/**
- * @param {Playlist | LeanPlaylist} model
+ * @param {import('../schema.js').Playlist & { size: number }} model
  */
 export function serializePlaylist(model) {
   return {
-    _id: 'id' in model ? model.id : model._id.toString(),
+    _id: model.id,
     name: model.name,
-    author: model.author.toString(),
+    author: model.userID,
     createdAt: model.createdAt.toISOString(),
-    description: model.description,
-    size: model.media.length,
+    description: '',
+    size: model.size,
   };
 }
 
 /**
- * @param {Pick<User, '_id' | 'username' | 'slug' | 'roles' | 'avatar' |
- *   'createdAt' | 'updatedAt' | 'lastSeenAt'>} model
+ * @param {{
+ *   id: import('../schema.js').MediaID,
+ *   sourceType: string,
+ *   sourceID: string,
+ *   sourceData?: import('type-fest').JsonObject | null,
+ *   artist: string,
+ *   title: string,
+ *   duration: number,
+ *   thumbnail: string,
+ * }} model
+ */
+export function serializeMedia(model) {
+  return {
+    _id: model.id,
+    sourceType: model.sourceType,
+    sourceID: model.sourceID,
+    sourceData: model.sourceData,
+    artist: model.artist,
+    title: model.title,
+    duration: model.duration,
+    thumbnail: model.thumbnail,
+  };
+}
+
+/**
+ * @param {{
+ *   id: import('../schema.js').PlaylistItemID,
+ *   media: import('../schema.js').Media,
+ *   artist: string,
+ *   title: string,
+ *   start: number,
+ *   end: number,
+ *   createdAt?: Date,
+ *   updatedAt?: Date,
+ * }} model
+ */
+export function serializePlaylistItem(model) {
+  return {
+    _id: model.id,
+    media: serializeMedia(model.media),
+    artist: model.artist,
+    title: model.title,
+    start: model.start,
+    end: model.end,
+    createdAt: model.createdAt?.toISOString(),
+    updatedAt: model.updatedAt?.toISOString(),
+  };
+}
+
+/**
+ * @param {{
+ *   id: import('../schema.js').UserID,
+ *   username: string,
+ *   slug: string,
+ *   roles: string[],
+ *   avatar: string | null,
+ *   activePlaylistID?: string | null,
+ *   createdAt: Date,
+ *   updatedAt?: Date,
+ * }} model
  */
 export function serializeUser(model) {
   return {
-    _id: model._id.toString(),
+    _id: model.id,
     username: model.username,
     slug: model.slug,
     roles: model.roles,
     avatar: model.avatar,
-    createdAt: model.createdAt.toISOString(),
-    updatedAt: model.updatedAt.toISOString(),
-    lastSeenAt: model.lastSeenAt.toISOString(),
+    activePlaylist: model.activePlaylistID ?? null,
+    createdAt: model.createdAt.toISOString() ?? null,
+    updatedAt: model.updatedAt?.toISOString() ?? null,
+    // lastSeenAt: model.lastSeenAt?.toISOString(),
   };
 }

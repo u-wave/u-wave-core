@@ -1,5 +1,3 @@
-import assert from 'node:assert';
-import mongoose from 'mongoose';
 import {
   HTTPError,
   PermissionError,
@@ -12,8 +10,17 @@ import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
+import { Permissions } from '../plugins/acl.js';
 
-const { ObjectId } = mongoose.Types;
+/**
+ * @typedef {import('../schema').UserID} UserID
+ * @typedef {import('../schema').MediaID} MediaID
+ * @typedef {import('../schema').PlaylistID} PlaylistID
+ * @typedef {import('../schema').HistoryEntryID} HistoryEntryID
+ */
+
+const REDIS_HISTORY_ID = 'booth:historyID';
+const REDIS_CURRENT_DJ_ID = 'booth:currentDJ';
 
 /**
  * @param {import('../Uwave.js').default} uw
@@ -21,25 +28,25 @@ const { ObjectId } = mongoose.Types;
 async function getBoothData(uw) {
   const { booth } = uw;
 
-  const historyEntry = await booth.getCurrentEntry();
-
-  if (!historyEntry || !historyEntry.user) {
+  const state = await booth.getCurrentEntry();
+  if (state == null) {
     return null;
   }
 
-  await historyEntry.populate('media.media');
   // @ts-expect-error TS2322: We just populated historyEntry.media.media
-  const media = booth.getMediaForPlayback(historyEntry);
-
-  const stats = await booth.getCurrentVoteStats();
+  const media = booth.getMediaForPlayback(state);
 
   return {
-    historyID: historyEntry.id,
-    playlistID: `${historyEntry.playlist}`,
-    playedAt: historyEntry.playedAt.getTime(),
-    userID: `${historyEntry.user}`,
+    historyID: state.historyEntry.id,
+    // playlistID: state.playlist.id,
+    playedAt: state.historyEntry.createdAt.getTime(),
+    userID: state.user.id,
     media,
-    stats,
+    stats: {
+      upvotes: state.upvotes,
+      downvotes: state.downvotes,
+      favorites: state.favorites,
+    },
   };
 }
 
@@ -62,16 +69,22 @@ async function getBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @returns {Promise<string|null>}
  */
 function getCurrentDJ(uw) {
-  return uw.redis.get('booth:currentDJ');
+  return /** @type {Promise<UserID|null>} */ (uw.redis.get(REDIS_CURRENT_DJ_ID));
 }
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {string|null} moderatorID - `null` if a user is skipping their own turn.
- * @param {string} userID
+ */
+function getCurrentHistoryID(uw) {
+  return /** @type {Promise<HistoryEntryID|null>} */ (uw.redis.get(REDIS_HISTORY_ID));
+}
+
+/**
+ * @param {import('../Uwave.js').default} uw
+ * @param {UserID|null} moderatorID - `null` if a user is skipping their own turn.
+ * @param {UserID} userID
  * @param {string|null} reason
  * @param {{ remove?: boolean }} [opts]
  */
@@ -89,12 +102,11 @@ async function doSkip(uw, moderatorID, userID, reason, opts = {}) {
 
 /**
  * @typedef {object} SkipUserAndReason
- * @prop {string} userID
+ * @prop {UserID} userID
  * @prop {string} reason
- *
  * @typedef {{
  *   remove?: boolean,
- *   userID?: string,
+ *   userID?: UserID,
  *   reason?: string,
  * } & (SkipUserAndReason | {})} SkipBoothBody
  */
@@ -121,8 +133,8 @@ async function skipBooth(req) {
     return toItemResponse({});
   }
 
-  if (!await acl.isAllowed(user, 'booth.skip.other')) {
-    throw new PermissionError({ requiredRole: 'booth.skip.other' });
+  if (!await acl.isAllowed(user, Permissions.SkipOther)) {
+    throw new PermissionError({ requiredRole: Permissions.SkipOther });
   }
 
   // @ts-expect-error TS2345 pretending like `userID` is definitely defined here
@@ -132,7 +144,7 @@ async function skipBooth(req) {
   return toItemResponse({});
 }
 
-/** @typedef {{ userID: string, autoLeave: boolean }} LeaveBoothBody */
+/** @typedef {{ userID: UserID, autoLeave: boolean }} LeaveBoothBody */
 
 /**
  * @type {import('../types.js').AuthenticatedController<{}, {}, LeaveBoothBody>}
@@ -149,8 +161,8 @@ async function leaveBooth(req) {
     return toItemResponse({ autoLeave: value });
   }
 
-  if (!await acl.isAllowed(self, 'booth.skip.other')) {
-    throw new PermissionError({ requiredRole: 'booth.skip.other' });
+  if (!await acl.isAllowed(self, Permissions.SkipOther)) {
+    throw new PermissionError({ requiredRole: Permissions.SkipOther });
   }
 
   const user = await users.getUser(userID);
@@ -164,7 +176,7 @@ async function leaveBooth(req) {
 
 /**
  * @typedef {object} ReplaceBoothBody
- * @prop {string} userID
+ * @prop {UserID} userID
  */
 
 /**
@@ -198,54 +210,58 @@ async function replaceBooth(req) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {string} userID
+ * @param {HistoryEntryID} historyEntryID
+ * @param {UserID} userID
  * @param {1|-1} direction
  */
-async function addVote(uw, userID, direction) {
-  const results = await uw.redis.multi()
-    .srem('booth:upvotes', userID)
-    .srem('booth:downvotes', userID)
-    .sadd(direction > 0 ? 'booth:upvotes' : 'booth:downvotes', userID)
-    .exec();
-  assert(results);
+async function addVote(uw, historyEntryID, userID, direction) {
+  const result = await uw.db.insertInto('feedback')
+    .values({
+      historyEntryID,
+      userID,
+      vote: direction,
+    })
+    // We should only broadcast the vote if it changed,
+    // so we make sure not to update the vote if the value is the same.
+    .onConflict((oc) => oc
+      .columns(['historyEntryID', 'userID'])
+      .doUpdateSet({ vote: direction })
+      .where('vote', '!=', direction))
+    .executeTakeFirst();
 
-  const replacedUpvote = results[0][1] !== 0;
-  const replacedDownvote = results[1][1] !== 0;
-
-  // Replaced an upvote by an upvote or a downvote by a downvote: the vote didn't change.
-  // We don't need to broadcast the non-change to everyone.
-  if ((replacedUpvote && direction > 0) || (replacedDownvote && direction < 0)) {
-    return;
+  if (result != null && result.numInsertedOrUpdatedRows != null
+      && result.numInsertedOrUpdatedRows > 0n) {
+    uw.publish('booth:vote', {
+      userID, direction,
+    });
   }
-
-  uw.publish('booth:vote', {
-    userID, direction,
-  });
 }
 
 /**
  * Old way of voting: over the WebSocket
  *
  * @param {import('../Uwave.js').default} uw
- * @param {string} userID
+ * @param {UserID} userID
  * @param {1|-1} direction
  */
 async function socketVote(uw, userID, direction) {
   const currentDJ = await getCurrentDJ(uw);
-  if (currentDJ !== null && currentDJ !== userID) {
-    const historyID = await uw.redis.get('booth:historyID');
-    if (historyID === null) return;
+  if (currentDJ != null && currentDJ !== userID) {
+    const historyEntryID = await getCurrentHistoryID(uw);
+    if (historyEntryID == null) {
+      return;
+    }
     if (direction > 0) {
-      await addVote(uw, userID, 1);
+      await addVote(uw, historyEntryID, userID, 1);
     } else {
-      await addVote(uw, userID, -1);
+      await addVote(uw, historyEntryID, userID, -1);
     }
   }
 }
 
 /**
  * @typedef {object} GetVoteParams
- * @prop {string} historyID
+ * @prop {HistoryEntryID} historyID
  */
 
 /**
@@ -255,36 +271,27 @@ async function getVote(req) {
   const { uwave: uw, user } = req;
   const { historyID } = req.params;
 
-  const [currentDJ, currentHistoryID] = await Promise.all([
-    getCurrentDJ(uw),
-    uw.redis.get('booth:historyID'),
-  ]);
-  if (currentDJ === null || currentHistoryID === null) {
+  const currentHistoryID = await getCurrentHistoryID(uw);
+  if (currentHistoryID == null) {
     throw new HTTPError(412, 'Nobody is playing');
   }
   if (historyID && historyID !== currentHistoryID) {
     throw new HTTPError(412, 'Cannot get vote for media that is not currently playing');
   }
 
-  const [upvoted, downvoted] = await Promise.all([
-    uw.redis.sismember('booth:upvotes', user.id),
-    uw.redis.sismember('booth:downvotes', user.id),
-  ]);
+  const feedback = await uw.db.selectFrom('feedback')
+    .where('historyEntryID', '=', historyID)
+    .where('userID', '=', user.id)
+    .select('vote')
+    .executeTakeFirst();
 
-  let direction = 0;
-  if (upvoted) {
-    direction = 1;
-  } else if (downvoted) {
-    direction = -1;
-  }
-
+  const direction = feedback?.vote ?? 0;
   return toItemResponse({ direction });
 }
 
 /**
  * @typedef {object} VoteParams
- * @prop {string} historyID
- *
+ * @prop {HistoryEntryID} historyID
  * @typedef {object} VoteBody
  * @prop {1|-1} direction
  */
@@ -299,9 +306,9 @@ async function vote(req) {
 
   const [currentDJ, currentHistoryID] = await Promise.all([
     getCurrentDJ(uw),
-    uw.redis.get('booth:historyID'),
+    getCurrentHistoryID(uw),
   ]);
-  if (currentDJ === null || currentHistoryID === null) {
+  if (currentDJ == null || currentHistoryID == null) {
     throw new HTTPError(412, 'Nobody is playing');
   }
   if (currentDJ === user.id) {
@@ -312,9 +319,9 @@ async function vote(req) {
   }
 
   if (direction > 0) {
-    await addVote(uw, user.id, 1);
+    await addVote(uw, historyID, user.id, 1);
   } else {
-    await addVote(uw, user.id, -1);
+    await addVote(uw, historyID, user.id, -1);
   }
 
   return toItemResponse({});
@@ -322,8 +329,8 @@ async function vote(req) {
 
 /**
  * @typedef {object} FavoriteBody
- * @prop {string} playlistID
- * @prop {string} historyID
+ * @prop {PlaylistID} playlistID
+ * @prop {HistoryEntryID} historyID
  */
 
 /**
@@ -332,41 +339,49 @@ async function vote(req) {
 async function favorite(req) {
   const { user } = req;
   const { playlistID, historyID } = req.body;
+  const { db, history, playlists } = req.uwave;
   const uw = req.uwave;
-  const { PlaylistItem, HistoryEntry } = uw.models;
 
-  const historyEntry = await HistoryEntry.findById(historyID);
+  const historyEntry = await history.getEntry(historyID);
 
   if (!historyEntry) {
     throw new HistoryEntryNotFoundError({ id: historyID });
   }
-  if (`${historyEntry.user}` === user.id) {
+  if (historyEntry.user._id === user.id) {
     throw new CannotSelfFavoriteError();
   }
 
-  const playlist = await uw.playlists.getUserPlaylist(user, new ObjectId(playlistID));
+  const playlist = await playlists.getUserPlaylist(user, playlistID);
   if (!playlist) {
     throw new PlaylistNotFoundError({ id: playlistID });
   }
 
-  // `.media` has the same shape as `.item`, but is guaranteed to exist and have
-  // the same properties as when the playlist item was actually played.
-  const itemProps = historyEntry.media.toJSON();
-  const playlistItem = await PlaylistItem.create(itemProps);
+  const result = await playlists.addPlaylistItems(
+    playlist,
+    [{
+      sourceType: historyEntry.media.media.sourceType,
+      sourceID: historyEntry.media.media.sourceID,
+      artist: historyEntry.media.artist,
+      title: historyEntry.media.title,
+      start: historyEntry.media.start,
+      end: historyEntry.media.end,
+    }],
+    { at: 'end' },
+  );
 
-  playlist.media.push(playlistItem.id);
+  await db.insertInto('feedback')
+    .values({ userID: user.id, historyEntryID: historyID, favorite: 1 })
+    .onConflict((oc) => oc.columns(['userID', 'historyEntryID']).doUpdateSet({ favorite: 1 }))
+    .execute();
 
-  await uw.redis.sadd('booth:favorites', user.id);
   uw.publish('booth:favorite', {
     userID: user.id,
     playlistID,
   });
 
-  await playlist.save();
-
-  return toListResponse([playlistItem], {
+  return toListResponse(result.added, {
     meta: {
-      playlistSize: playlist.media.length,
+      playlistSize: result.playlistSize,
     },
     included: {
       media: ['media'],
@@ -376,7 +391,7 @@ async function favorite(req) {
 
 /**
  * @typedef {object} GetRoomHistoryQuery
- * @prop {import('../types.js').PaginationQuery & { media?: string }} [filter]
+ * @prop {import('../types.js').PaginationQuery & { media?: MediaID }} [filter]
  */
 /**
  * @type {import('../types.js').Controller<never, GetRoomHistoryQuery, never>}
@@ -393,7 +408,9 @@ async function getHistory(req) {
     filter['media.media'] = req.query.filter.media;
   }
 
-  const roomHistory = await history.getHistory(filter, pagination);
+  // TODO: Support filter?
+
+  const roomHistory = await history.getRoomHistory(pagination);
 
   return toPaginatedResponse(roomHistory, {
     baseUrl: req.fullUrl,

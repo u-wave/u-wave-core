@@ -5,6 +5,7 @@ import protect from '../middleware/protect.js';
 import requireActiveConnection from '../middleware/requireActiveConnection.js';
 import schema from '../middleware/schema.js';
 import * as controller from '../controllers/waitlist.js';
+import { Permissions } from '../plugins/acl.js';
 
 function waitlistRoutes() {
   return Router()
@@ -16,7 +17,7 @@ function waitlistRoutes() {
     // POST /waitlist/ - Add a user to the waitlist.
     .post(
       '/',
-      protect('waitlist.join'),
+      protect(Permissions.WaitlistJoin),
       requireActiveConnection(),
       schema(validations.joinWaitlist),
       route(controller.addToWaitlist),
@@ -24,26 +25,26 @@ function waitlistRoutes() {
     // DELETE /waitlist/ - Clear the waitlist.
     .delete(
       '/',
-      protect('waitlist.clear'),
+      protect(Permissions.WaitlistClear),
       route(controller.clearWaitlist),
     )
     // PUT /waitlist/move - Move a user to a different position in the waitlist.
     .put(
       '/move',
-      protect('waitlist.move'),
+      protect(Permissions.WaitlistMove),
       schema(validations.moveWaitlist),
       route(controller.moveWaitlist),
     )
     // DELETE /waitlist/:id - Remove a user from the waitlist.
     .delete(
       '/:id',
-      protect('waitlist.leave'),
+      protect(Permissions.WaitlistLeave),
       route(controller.removeFromWaitlist),
     )
     // PUT /waitlist/lock - Lock or unlock the waitlist.
     .put(
       '/lock',
-      protect('waitlist.lock'),
+      protect(Permissions.WaitlistLock),
       schema(validations.lockWaitlist),
       route(controller.lockWaitlist),
     );

@@ -3,6 +3,8 @@ import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
 
+/** @typedef {import('../schema').UserID} UserID */
+
 /**
  * @typedef {object} GetBansQuery
  * @prop {string} filter
@@ -29,7 +31,7 @@ async function getBans(req) {
 /**
  * @typedef {object} AddBanBody
  * @prop {number} [duration]
- * @prop {string} userID
+ * @prop {UserID} userID
  * @prop {boolean} [permanent]
  * @prop {string} [reason]
  */
@@ -66,7 +68,7 @@ async function addBan(req) {
 
 /**
  * @typedef {object} RemoveBanParams
- * @prop {string} userID
+ * @prop {UserID} userID
  */
 
 /**

@@ -128,7 +128,7 @@ export const skipBooth = /** @type {const} */ ({
     type: 'object',
     properties: {
       reason: { type: 'string' },
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       remove: { type: 'boolean', default: false },
     },
     dependentRequired: {
@@ -142,7 +142,7 @@ export const leaveBooth = /** @type {const} */ ({
   body: {
     type: 'object',
     properties: {
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       autoLeave: { type: 'boolean', default: true },
     },
   },
@@ -152,7 +152,7 @@ export const replaceBooth = /** @type {const} */ ({
   body: {
     type: 'object',
     properties: {
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['userID'],
   },
@@ -162,7 +162,7 @@ export const getVote = /** @type {const} */ ({
   params: {
     type: 'object',
     properties: {
-      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['historyID'],
   },
@@ -172,7 +172,7 @@ export const vote = /** @type {const} */ ({
   params: {
     type: 'object',
     properties: {
-      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['historyID'],
   },
@@ -189,8 +189,8 @@ export const favorite = /** @type {const} */ ({
   body: {
     type: 'object',
     properties: {
-      playlistID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
-      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      playlistID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
+      historyID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['playlistID', 'historyID'],
   },
@@ -211,7 +211,7 @@ export const getRoomHistory = /** @type {const} */ ({
           filter: {
             type: 'object',
             properties: {
-              media: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+              media: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
             },
           },
         },
@@ -226,7 +226,7 @@ export const deleteChatByUser = /** @type {const} */ ({
   params: {
     type: 'object',
     properties: {
-      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['id'],
   },
@@ -260,7 +260,7 @@ export const setMotd = /** @type {const} */ ({
 const playlistParams = /** @type {const} */ ({
   type: 'object',
   properties: {
-    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
   },
   required: ['id'],
 });
@@ -268,8 +268,8 @@ const playlistParams = /** @type {const} */ ({
 const playlistItemParams = /** @type {const} */ ({
   type: 'object',
   properties: {
-    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
-    itemID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
+    itemID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
   },
   required: ['id', 'itemID'],
 });
@@ -278,7 +278,7 @@ export const getPlaylists = /** @type {const} */ ({
   query: {
     type: 'object',
     properties: {
-      contains: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      contains: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
   },
 });
@@ -369,7 +369,7 @@ export const addPlaylistItems = /** @type {const} */ ({
         properties: {
           after: {
             oneOf: [
-              { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+              { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
               { const: null },
               { const: -1 },
             ],
@@ -395,7 +395,7 @@ export const removePlaylistItems = /** @type {const} */ ({
     properties: {
       items: {
         type: 'array',
-        items: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+        items: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       },
     },
     required: ['items'],
@@ -409,7 +409,7 @@ export const movePlaylistItems = /** @type {const} */ ({
     properties: {
       items: {
         type: 'array',
-        items: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+        items: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       },
     },
     required: ['items'],
@@ -420,7 +420,7 @@ export const movePlaylistItems = /** @type {const} */ ({
         properties: {
           after: {
             oneOf: [
-              { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+              { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
               { const: null },
               { const: -1 },
             ],
@@ -499,7 +499,7 @@ export const search = /** @type {const} */ ({
 const userParams = /** @type {const} */ ({
   type: 'object',
   properties: {
-    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+    id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
   },
   required: ['id'],
 });
@@ -527,7 +527,7 @@ export const addUserRole = /** @type {const} */ ({
   params: {
     type: 'object',
     properties: {
-      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       role: { type: 'string' },
     },
     required: ['id', 'role'],
@@ -538,7 +538,7 @@ export const removeUserRole = /** @type {const} */ ({
   params: {
     type: 'object',
     properties: {
-      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      id: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       role: { type: 'string' },
     },
     required: ['id', 'role'],
@@ -595,7 +595,7 @@ export const joinWaitlist = /** @type {const} */ ({
   body: {
     type: 'object',
     properties: {
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
     },
     required: ['userID'],
   },
@@ -605,7 +605,7 @@ export const moveWaitlist = /** @type {const} */ ({
   body: {
     type: 'object',
     properties: {
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/ObjectID' },
+      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
       position: {
         type: 'integer',
         minimum: 0,

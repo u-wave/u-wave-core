@@ -1,5 +1,4 @@
 import { promisify } from 'node:util';
-import mongoose from 'mongoose';
 import lodash from 'lodash';
 import sjson from 'secure-json-parse';
 import { WebSocketServer } from 'ws';
@@ -15,10 +14,9 @@ import LostConnection from './sockets/LostConnection.js';
 import { serializeUser } from './utils/serialize.js';
 
 const { debounce, isEmpty } = lodash;
-const { ObjectId } = mongoose.mongo;
 
 /**
- * @typedef {import('./models/index.js').User} User
+ * @typedef {import('./schema.js').User} User
  */
 
 /**
@@ -109,6 +107,7 @@ class SocketServer {
 
   /**
    * Handlers for commands that come in from clients.
+   *
    * @type {ClientActions}
    */
   #clientActions;
@@ -206,7 +205,7 @@ class SocketServer {
       logout: (user, _, connection) => {
         this.replace(connection, this.createGuestConnection(connection.socket));
         if (!this.connection(user)) {
-          disconnectUser(this.#uw, user._id);
+          disconnectUser(this.#uw, user.id);
         }
       },
     };
@@ -231,7 +230,6 @@ class SocketServer {
           this.broadcast('advance', {
             historyID: next.historyID,
             userID: next.userID,
-            itemID: next.itemID,
             media: next.media,
             playedAt: new Date(next.playedAt).getTime(),
           });
@@ -448,19 +446,22 @@ class SocketServer {
   /**
    * Create `LostConnection`s for every user that's known to be online, but that
    * is not currently connected to the socket server.
+   *
    * @private
    */
   async initLostConnections() {
-    const { User } = this.#uw.models;
-    const userIDs = await this.#uw.redis.lrange('users', 0, -1);
-    const disconnectedIDs = userIDs
-      .filter((userID) => !this.connection(userID))
-      .map((userID) => new ObjectId(userID));
+    const { db, redis } = this.#uw;
+    const userIDs = /** @type {import('./schema').UserID[]} */ (await redis.lrange('users', 0, -1));
+    const disconnectedIDs = userIDs.filter((userID) => !this.connection(userID));
 
-    /** @type {User[]} */
-    const disconnectedUsers = await User.find({
-      _id: { $in: disconnectedIDs },
-    }).exec();
+    if (disconnectedIDs.length === 0) {
+      return;
+    }
+
+    const disconnectedUsers = await db.selectFrom('users')
+      .where('id', 'in', disconnectedIDs)
+      .selectAll()
+      .execute();
     disconnectedUsers.forEach((user) => {
       this.add(this.createLostConnection(user));
     });
@@ -556,7 +557,7 @@ class SocketServer {
     connection.on('close', ({ banned }) => {
       if (banned) {
         this.#logger.info({ userId: user.id }, 'removing connection after ban');
-        disconnectUser(this.#uw, user._id);
+        disconnectUser(this.#uw, user.id);
       } else if (!this.#closing) {
         this.#logger.info({ userId: user.id }, 'lost connection');
         this.add(this.createLostConnection(user));
@@ -602,7 +603,7 @@ class SocketServer {
       // Only register that the user left if they didn't have another connection
       // still open.
       if (!this.connection(user)) {
-        disconnectUser(this.#uw, user._id);
+        disconnectUser(this.#uw, user.id);
       }
     });
     return connection;
@@ -659,7 +660,7 @@ class SocketServer {
    *
    * @param {string} channel
    * @param {string} rawCommand
-   * @return {Promise<void>}
+   * @returns {Promise<void>}
    * @private
    */
   async onServerMessage(channel, rawCommand) {
@@ -686,7 +687,7 @@ class SocketServer {
   /**
    * Stop the socket server.
    *
-   * @return {Promise<void>}
+   * @returns {Promise<void>}
    */
   async destroy() {
     clearInterval(this.#pinger);
@@ -707,7 +708,7 @@ class SocketServer {
    * Get the connection instance for a specific user.
    *
    * @param {User|string} user The user.
-   * @return {Connection|undefined}
+   * @returns {Connection|undefined}
    */
   connection(user) {
     const userID = typeof user === 'object' ? user.id : user;

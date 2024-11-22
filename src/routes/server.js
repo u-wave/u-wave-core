@@ -2,6 +2,7 @@ import { Router } from 'express';
 import route from '../route.js';
 import protect from '../middleware/protect.js';
 import * as controller from '../controllers/server.js';
+import { Permissions } from '../plugins/acl.js';
 
 function serverRoutes() {
   return Router()
@@ -13,19 +14,19 @@ function serverRoutes() {
     // GET /server/config
     .get(
       '/config',
-      protect('admin'),
+      protect(Permissions.Super),
       route(controller.getAllConfig),
     )
     // GET /server/config/:key
     .get(
       '/config/:key',
-      protect('admin'),
+      protect(Permissions.Super),
       route(controller.getConfig),
     )
     // PUT /server/config/:key
     .put(
       '/config/:key',
-      protect('admin'),
+      protect(Permissions.Super),
       route(controller.updateConfig),
     );
 }

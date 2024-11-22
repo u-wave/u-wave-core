@@ -1,22 +1,23 @@
+import { randomUUID } from 'crypto';
 import events from 'events';
-import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import WebSocket from 'ws';
 
 async function testPlugin(uw) {
-  const { User } = uw.models;
-
   let i = Date.now();
-  async function createUser() {
+  function createUser() {
     const props = {
-      _id: new mongoose.Types.ObjectId(),
+      id: randomUUID(),
       username: `test_user_${i.toString(36)}`,
       slug: i.toString(36),
+      email: `test${i.toString(36)}@example.com`,
+      password: 'passwordhash',
     };
     i += 1;
-    const user = new User(props);
-    await user.save();
-    return user;
+    return uw.db.insertInto('users')
+      .values(props)
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   async function connectToWebSocketAs(user) {

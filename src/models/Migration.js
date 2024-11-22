@@ -8,7 +8,6 @@ const { Schema } = mongoose;
  * @prop {string} migrationName
  * @prop {Date} createdAt
  * @prop {Date} updatedAt
- *
  * @typedef {mongoose.Document<LeanMigration["_id"], {}, LeanMigration> & LeanMigration} Migration
  */
 

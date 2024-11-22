@@ -13,19 +13,29 @@ describe('Media Sources', () => {
     await uw.destroy();
   });
 
+  function makeTestMedia(sourceID) {
+    return {
+      sourceType: 'test-source',
+      sourceID,
+      artist: `artist ${sourceID}`,
+      title: `title ${sourceID}`,
+      thumbnail: 'https://placedog.net/280',
+    };
+  }
+
   const testSourceObject = {
     name: 'test-source',
     async search(query) {
-      return [{ sourceID: query }];
+      return [makeTestMedia(query)];
     },
     async get(ids) {
-      return ids.map((sourceID) => ({ sourceID }));
+      return ids.map((sourceID) => makeTestMedia(sourceID));
     },
   };
 
   function testSource() {
     const search = async (query) => [{ sourceID: query }];
-    const get = async (ids) => ids.map((sourceID) => ({ sourceID }));
+    const get = async (ids) => ids.map((sourceID) => makeTestMedia(sourceID));
     return {
       name: 'test-source',
       search,
@@ -69,8 +79,12 @@ describe('Media Sources', () => {
     uw.source(testSource);
     const results = await uw.source('test-source').get(null, ['one', 'two']);
     assert.deepStrictEqual(results, [
-      { sourceType: 'test-source', sourceID: 'one' },
-      { sourceType: 'test-source', sourceID: 'two' },
+      {
+        sourceType: 'test-source', sourceID: 'one', artist: 'artist one', title: 'title one', thumbnail: 'https://placedog.net/280',
+      },
+      {
+        sourceType: 'test-source', sourceID: 'two', artist: 'artist two', title: 'title two', thumbnail: 'https://placedog.net/280',
+      },
     ]);
   });
 

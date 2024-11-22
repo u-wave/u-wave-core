@@ -6,13 +6,14 @@ import schema from '../middleware/schema.js';
 import rateLimit from '../middleware/rateLimit.js';
 import * as controller from '../controllers/users.js';
 import { NameChangeRateLimitError } from '../errors/index.js';
+import { Permissions } from '../plugins/acl.js';
 
 function userRoutes() {
   return Router()
     // GET /users/ - List user accounts.
     .get(
       '/',
-      protect('users.list'),
+      protect(Permissions.UserList),
       route(controller.getUsers),
     )
     // GET /users/:id - Show a single user.
@@ -25,7 +26,7 @@ function userRoutes() {
     // TODO move this to /mutes/ namespace.
     .post(
       '/:id/mute',
-      protect('chat.mute'),
+      protect(Permissions.ChatMute),
       schema(validations.muteUser),
       route(controller.muteUser),
     )
@@ -33,7 +34,7 @@ function userRoutes() {
     // TODO move this to /mutes/ namespace.
     .delete(
       '/:id/mute',
-      protect('chat.unmute'),
+      protect(Permissions.ChatUnmute),
       schema(validations.unmuteUser),
       route(controller.unmuteUser),
     )

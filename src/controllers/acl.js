@@ -16,7 +16,6 @@ async function list(req) {
 /**
  * @typedef {object} CreateRoleParams
  * @prop {string} name
- *
  * @typedef {object} CreateRoleBody
  * @prop {string[]} permissions
  */
@@ -29,7 +28,10 @@ async function createRole(req, res) {
   const { permissions } = req.body;
   const { acl } = req.uwave;
 
-  const role = await acl.createRole(name, permissions);
+  const role = await acl.createRole(
+    name,
+    /** @type {import('../schema.js').Permission[]} */ (permissions),
+  );
 
   res.status(201);
   return toItemResponse(role, {

@@ -4,6 +4,7 @@ import * as validations from '../validations.js';
 import protect from '../middleware/protect.js';
 import schema from '../middleware/schema.js';
 import * as controller from '../controllers/motd.js';
+import { Permissions } from '../plugins/acl.js';
 
 function motdRoutes() {
   return Router()
@@ -15,7 +16,7 @@ function motdRoutes() {
     // PUT /motd/ - Set the message of the day.
     .put(
       '/',
-      protect('motd.set'),
+      protect(Permissions.MotdSet),
       schema(validations.setMotd),
       route(controller.setMotd),
     );

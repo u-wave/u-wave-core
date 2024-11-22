@@ -5,18 +5,23 @@ import nodeFetch from 'node-fetch';
 import ms from 'ms';
 import htmlescape from 'htmlescape';
 import httpErrors from 'http-errors';
+import nodemailer from 'nodemailer';
 import {
   BannedError,
   ReCaptchaError,
   InvalidResetTokenError,
   UserNotFoundError,
 } from '../errors/index.js';
-import sendEmail from '../email.js';
 import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
+import { serializeUser } from '../utils/serialize.js';
 
 const { BadRequest } = httpErrors;
+
+/**
+ * @typedef {import('../schema').UserID} UserID
+ */
 
 /**
  * @typedef {object} AuthenticateOptions
@@ -28,7 +33,6 @@ const { BadRequest } = httpErrors;
  *   import('nodemailer').SendMailOptions} createPasswordResetEmail
  * @prop {boolean} [cookieSecure]
  * @prop {string} [cookiePath]
- *
  * @typedef {object} WithAuthOptions
  * @prop {AuthenticateOptions} authOptions
  */
@@ -44,7 +48,7 @@ function seconds(str) {
  * @type {import('../types.js').Controller}
  */
 async function getCurrentUser(req) {
-  return toItemResponse(req.user ?? null, {
+  return toItemResponse(req.user != null ? serializeUser(req.user) : null, {
     url: req.fullUrl,
   });
 }
@@ -66,7 +70,7 @@ async function getAuthStrategies(req) {
 /**
  * @param {import('express').Response} res
  * @param {import('../HttpApi.js').HttpApi} api
- * @param {import('../models/index.js').User} user
+ * @param {import('../schema.js').User} user
  * @param {AuthenticateOptions & { session: 'cookie' | 'token' }} options
  */
 async function refreshSession(res, api, user, options) {
@@ -98,7 +102,6 @@ async function refreshSession(res, api, user, options) {
  *
  * @typedef {object} LoginQuery
  * @prop {'cookie'|'token'} [session]
- *
  * @param {import('../types.js').AuthenticatedRequest<{}, LoginQuery, {}> & WithAuthOptions} req
  * @param {import('express').Response} res
  */
@@ -129,21 +132,17 @@ async function login(req, res) {
 
 /**
  * @param {import('../Uwave.js').default} uw
- * @param {import('../models/index.js').User} user
+ * @param {import('../schema.js').User} user
  * @param {string} service
  */
 async function getSocialAvatar(uw, user, service) {
-  const { Authentication } = uw.models;
+  const auth = await uw.db.selectFrom('authServices')
+    .where('userID', '=', user.id)
+    .where('service', '=', service)
+    .select(['serviceAvatar'])
+    .executeTakeFirst();
 
-  /** @type {import('../models/index.js').Authentication|null} */
-  const auth = await Authentication.findOne({
-    user: user._id,
-    type: service,
-  });
-  if (auth && auth.avatar) {
-    return auth.avatar;
-  }
-  return null;
+  return auth?.serviceAvatar ?? null;
 }
 
 /**
@@ -213,7 +212,6 @@ async function socialLoginCallback(service, req, res) {
 /**
  * @typedef {object} SocialLoginFinishQuery
  * @prop {'cookie'|'token'} [session]
- *
  * @typedef {object} SocialLoginFinishBody
  * @prop {string} username
  * @prop {string} avatar
@@ -229,7 +227,7 @@ async function socialLoginFinish(service, req, res) {
   const options = req.authOptions;
   const { pendingUser: user } = req;
   const sessionType = req.query.session === 'cookie' ? 'cookie' : 'token';
-  const { bans } = req.uwave;
+  const { db, bans } = req.uwave;
 
   if (!user) {
     // Should never happen so not putting much effort into
@@ -252,10 +250,17 @@ async function socialLoginFinish(service, req, res) {
     avatarUrl = `https://sigil.u-wave.net/${user.id}`;
   }
 
-  user.username = username;
-  user.avatar = avatarUrl;
-  user.pendingActivation = undefined;
-  await user.save();
+  const updates = await db.updateTable('users')
+    .where('id', '=', user.id)
+    .set({
+      username,
+      avatar: avatarUrl,
+      pendingActivation: false,
+    })
+    .returning(['username', 'avatar', 'pendingActivation'])
+    .executeTakeFirst();
+
+  Object.assign(user, updates);
 
   const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, {
     ...options,
@@ -348,7 +353,7 @@ async function register(req) {
       password,
     });
 
-    return toItemResponse(user);
+    return toItemResponse(serializeUser(user));
   } catch (error) {
     throw beautifyDuplicateKeyError(error);
   }
@@ -363,32 +368,38 @@ async function register(req) {
  * @param {import('../types.js').Request<{}, {}, RequestPasswordResetBody> & WithAuthOptions} req
  */
 async function reset(req) {
-  const uw = req.uwave;
-  const { Authentication } = uw.models;
+  const { db, redis } = req.uwave;
   const { email } = req.body;
   const { mailTransport, createPasswordResetEmail } = req.authOptions;
 
-  const auth = await Authentication.findOne({
-    email: email.toLowerCase(),
-  });
-  if (!auth) {
+  const user = await db.selectFrom('users')
+    .where('email', '=', email)
+    .select(['id'])
+    .executeTakeFirst();
+  if (!user) {
     throw new UserNotFoundError({ email });
   }
 
   const token = randomString({ length: 35, special: false });
 
-  await uw.redis.set(`reset:${token}`, auth.user.toString());
-  await uw.redis.expire(`reset:${token}`, 24 * 60 * 60);
+  await redis.set(`reset:${token}`, user.id);
+  await redis.expire(`reset:${token}`, 24 * 60 * 60);
 
-  const message = await createPasswordResetEmail({
+  const message = createPasswordResetEmail({
     token,
     requestUrl: req.fullUrl,
   });
 
-  await sendEmail(email, {
-    mailTransport,
-    email: message,
+  const transporter = nodemailer.createTransport(mailTransport ?? {
+    host: 'localhost',
+    port: 25,
+    debug: true,
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
+
+  await transporter.sendMail({ to: email, ...message });
 
   return toItemResponse({});
 }
@@ -396,7 +407,6 @@ async function reset(req) {
 /**
  * @typedef {object} ChangePasswordParams
  * @prop {string} reset
- *
  * @typedef {object} ChangePasswordBody
  * @prop {string} password
  */
@@ -409,14 +419,14 @@ async function changePassword(req) {
   const { reset: resetToken } = req.params;
   const { password } = req.body;
 
-  const userId = await redis.get(`reset:${resetToken}`);
-  if (!userId) {
+  const userID = /** @type {UserID} */ (await redis.get(`reset:${resetToken}`));
+  if (!userID) {
     throw new InvalidResetTokenError();
   }
 
-  const user = await users.getUser(userId);
+  const user = await users.getUser(userID);
   if (!user) {
-    throw new UserNotFoundError({ id: userId });
+    throw new UserNotFoundError({ id: userID });
   }
 
   await users.updatePassword(user.id, password);

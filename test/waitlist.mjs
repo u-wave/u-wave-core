@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import * as sinon from 'sinon';
 import randomString from 'random-string';
 import createUwave from './utils/createUwave.mjs';
+import testSource from './utils/testSource.mjs';
 
 describe('Waitlist', () => {
   let user;
@@ -12,21 +13,7 @@ describe('Waitlist', () => {
     uw = await createUwave('waitlist');
     user = await uw.test.createUser();
 
-    uw.source({
-      name: 'test-source',
-      api: 2,
-      async get(_context, ids) {
-        return ids.map((id) => ({
-          sourceID: id,
-          artist: `artist ${id}`,
-          title: `title ${id}`,
-          duration: 60,
-        }));
-      },
-      async search() {
-        throw new Error('unimplemented');
-      },
-    });
+    uw.source(testSource);
   });
   afterEach(async () => {
     await uw.destroy();
@@ -37,7 +24,7 @@ describe('Waitlist', () => {
   }
 
   async function createTestPlaylistItem(testUser) {
-    const playlist = await uw.playlists.createPlaylist(testUser, { name: 'Test Playlist' });
+    const { playlist } = await uw.playlists.createPlaylist(testUser, { name: 'Test Playlist' });
     await uw.playlists.addPlaylistItems(playlist, [{
       sourceType: 'test-source',
       sourceID: randomString({ length: 10 }),
@@ -114,7 +101,7 @@ describe('Waitlist', () => {
         .expect(403);
       sinon.assert.match(noPlaylistRes.body.errors[0], { code: 'empty-playlist' });
 
-      const playlist = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
+      const { playlist } = await uw.playlists.createPlaylist(user, { name: 'Test Playlist' });
 
       const emptyPlaylistRes = await supertest(uw.server)
         .post('/api/waitlist')
@@ -180,7 +167,8 @@ describe('Waitlist', () => {
         .send({ userID: testSubject.id })
         .expect(403);
 
-      await uw.acl.allow(user, ['waitlist.add']);
+      await uw.acl.createRole('adder', ['waitlist.add']);
+      await uw.acl.allow(user, ['adder']);
 
       await supertest(uw.server)
         .post('/api/waitlist')

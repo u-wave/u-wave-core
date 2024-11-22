@@ -2,14 +2,19 @@ import fs from 'node:fs';
 import EventEmitter from 'node:events';
 import Ajv from 'ajv/dist/2019.js';
 import formats from 'ajv-formats';
-import lodash from 'lodash';
 import jsonMergePatch from 'json-merge-patch';
 import sjson from 'secure-json-parse';
 import ValidationError from '../errors/ValidationError.js';
+import { sql } from 'kysely';
+import { jsonb } from '../utils/sqlite.js';
 
-const { omit } = lodash;
+/**
+ * @typedef {import('type-fest').JsonObject} JsonObject
+ * @typedef {import('../schema.js').UserID} UserID
+ * @typedef {import('../schema.js').User} User
+ */
 
-/** @typedef {import('../models/index.js').User} User */
+const CONFIG_UPDATE_MESSAGE = 'configStore:update';
 
 /**
  * Extensible configuration store.
@@ -27,7 +32,7 @@ class ConfigStore {
 
   #ajv;
 
-  #emitter;
+  #emitter = new EventEmitter();
 
   /** @type {Map<string, import('ajv').ValidateFunction<unknown>>} */
   #validators = new Map();
@@ -53,13 +58,11 @@ class ConfigStore {
       fs.readFileSync(new URL('../schemas/definitions.json', import.meta.url), 'utf8'),
     ));
 
-    this.#emitter = new EventEmitter();
-    this.#subscriber.subscribe('uwave').catch((error) => {
-      this.#logger.error(error);
-    });
     this.#subscriber.on('message', (_channel, command) => {
       this.#onServerMessage(command);
     });
+
+    uw.use(async () => this.#subscriber.subscribe('uwave'));
   }
 
   /**
@@ -77,9 +80,11 @@ class ConfigStore {
       return;
     }
     const { command, data } = json;
-    if (command !== 'configStore:update') {
+    if (command !== CONFIG_UPDATE_MESSAGE) {
       return;
     }
+
+    this.#logger.trace({ command, data }, 'handle config update');
 
     try {
       const updatedSettings = await this.get(data.key);
@@ -90,9 +95,9 @@ class ConfigStore {
   }
 
   /**
-   * @template {object} TSettings
+   * @template {JsonObject} TSettings
    * @param {string} key
-   * @param {(settings: TSettings, user: string|null, patch: Partial<TSettings>) => void} listener
+   * @param {(settings: TSettings, user: UserID|null, patch: Partial<TSettings>) => void} listener
    */
   subscribe(key, listener) {
     this.#emitter.on(key, listener);
@@ -100,34 +105,46 @@ class ConfigStore {
   }
 
   /**
-   * @param {string} key
-   * @param {object} values
-   * @returns {Promise<object|null>} The old values.
+   * @param {string} name
+   * @param {JsonObject} value
+   * @returns {Promise<JsonObject|null>} The old values.
    */
-  async #save(key, values) {
-    const { Config } = this.#uw.models;
+  async #save(name, value) {
+    const { db } = this.#uw;
 
-    const previousValues = await Config.findByIdAndUpdate(
-      key,
-      { _id: key, ...values },
-      { upsert: true },
-    );
+    const previous = await db.transaction().execute(async (tx) => {
+      const row = await tx.selectFrom('configuration')
+        .select(sql`json(value)`.as('value'))
+        .where('name', '=', name)
+        .executeTakeFirst();
 
-    return omit(previousValues, '_id');
+      await tx.insertInto('configuration')
+        .values({ name, value: jsonb(value) })
+        .onConflict((oc) => oc.column('name').doUpdateSet({ value: jsonb(value) }))
+        .execute();
+
+      return row?.value != null ? JSON.parse(/** @type {string} */ (row.value)) : null;
+    });
+
+    return previous;
   }
 
   /**
    * @param {string} key
-   * @returns {Promise<object|null>}
+   * @returns {Promise<JsonObject|null>}
    */
   async #load(key) {
-    const { Config } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const model = await Config.findById(key);
-    if (!model) return null;
+    const row = await db.selectFrom('configuration')
+      .select(sql`json(value)`.as('value'))
+      .where('name', '=', key)
+      .executeTakeFirst();
+    if (!row) {
+      return null;
+    }
 
-    const doc = model.toJSON();
-    return omit(doc, '_id');
+    return JSON.parse(/** @type {string} */ (row.value));
   }
 
   /**
@@ -146,13 +163,16 @@ class ConfigStore {
    * Get the current settings for a config group.
    *
    * @param {string} key
-   * @returns {Promise<undefined | object>} - `undefined` if the config group named `key` does not
+   * @returns {Promise<undefined | JsonObject>}
+   *     `undefined` if the config group named `key` does not
    *     exist. An object containing current settings otherwise.
    * @public
    */
   async get(key) {
     const validate = this.#validators.get(key);
-    if (!validate) return undefined;
+    if (!validate) {
+      return undefined;
+    }
 
     const config = (await this.#load(key)) ?? {};
     // Allowed to fail--just fills in defaults
@@ -167,7 +187,7 @@ class ConfigStore {
    * Rejects if the settings do not follow the schema for the config group.
    *
    * @param {string} key
-   * @param {object} settings
+   * @param {JsonObject} settings
    * @param {{ user?: User }} [options]
    * @public
    */
@@ -176,6 +196,7 @@ class ConfigStore {
     const validate = this.#validators.get(key);
     if (validate) {
       if (!validate(settings)) {
+        this.#logger.trace({ key, errors: validate.errors }, 'config validation error');
         throw new ValidationError(validate.errors, this.#ajv);
       }
     }
@@ -183,7 +204,8 @@ class ConfigStore {
     const oldSettings = await this.#save(key, settings);
     const patch = jsonMergePatch.generate(oldSettings, settings) ?? Object.create(null);
 
-    this.#uw.publish('configStore:update', {
+    this.#logger.trace({ key, patch }, 'fire config update');
+    await this.#uw.publish(CONFIG_UPDATE_MESSAGE, {
       key,
       user: user ? user.id : null,
       patch,
@@ -193,20 +215,27 @@ class ConfigStore {
   /**
    * Get *all* settings.
    *
-   * @returns {Promise<{ [key: string]: object }>}
+   * @returns {Promise<{ [key: string]: JsonObject }>}
    */
   async getAllConfig() {
-    const { Config } = this.#uw.models;
+    const { db } = this.#uw;
 
-    const all = await Config.find();
-    const object = Object.create(null);
+    const results = await db.selectFrom('configuration')
+      .select(['name', sql`json(value)`.as('value')])
+      .execute();
+
+    const configs = Object.create(null);
     for (const [key, validate] of this.#validators.entries()) {
-      const model = all.find((m) => m._id === key);
-      object[key] = model ? model.toJSON() : {};
-      delete object[key]._id;
-      validate(object[key]);
+      const row = results.find((m) => m.name === key);
+      if (row) {
+        const value = JSON.parse(/** @type {string} */ (row.value));
+        validate(value);
+        configs[key] = value;
+      } else {
+        configs[key] = {};
+      }
     }
-    return object;
+    return configs;
   }
 
   /**
