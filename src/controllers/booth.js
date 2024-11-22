@@ -216,18 +216,26 @@ async function replaceBooth(req) {
  * @param {1|-1} direction
  */
 async function addVote(uw, historyEntryID, userID, direction) {
-  await uw.db.insertInto('feedback')
+  const result = await uw.db.insertInto('feedback')
     .values({
       historyEntryID,
       userID,
       vote: direction,
     })
-    .onConflict((oc) => oc.columns(['historyEntryID', 'userID']).doUpdateSet({ vote: direction }))
-    .execute();
+    // We should only broadcast the vote if it changed,
+    // so we make sure not to update the vote if the value is the same.
+    .onConflict((oc) => oc
+      .columns(['historyEntryID', 'userID'])
+      .doUpdateSet({ vote: direction })
+      .where('vote', '!=', direction)
+    )
+    .executeTakeFirst();
 
-  uw.publish('booth:vote', {
-    userID, direction,
-  });
+  if (result != null && result.numInsertedOrUpdatedRows != null && result.numInsertedOrUpdatedRows > 0n) {
+    uw.publish('booth:vote', {
+      userID, direction,
+    });
+  }
 }
 
 /**

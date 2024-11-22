@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import * as sinon from 'sinon';
 import randomString from 'random-string';
 import createUwave from './utils/createUwave.mjs';
+import testSource from './utils/testSource.mjs';
 
 describe('Waitlist', () => {
   let user;
@@ -12,22 +13,7 @@ describe('Waitlist', () => {
     uw = await createUwave('waitlist');
     user = await uw.test.createUser();
 
-    uw.source({
-      name: 'test-source',
-      api: 2,
-      async get(_context, ids) {
-        return ids.map((id) => ({
-          sourceID: id,
-          artist: `artist ${id}`,
-          title: `title ${id}`,
-          duration: 60,
-          thumbnail: 'https://placedog.net/280',
-        }));
-      },
-      async search() {
-        throw new Error('unimplemented');
-      },
-    });
+    uw.source(testSource);
   });
   afterEach(async () => {
     await uw.destroy();

@@ -4,6 +4,7 @@ import supertest from 'supertest';
 import * as sinon from 'sinon';
 import randomString from 'random-string';
 import createUwave from './utils/createUwave.mjs';
+import testSource from './utils/testSource.mjs';
 
 function assertItemsAndIncludedMedia(body) {
   for (const item of body.data) {
@@ -39,22 +40,7 @@ describe('Playlists', () => {
     uw = await createUwave('acl');
     user = await uw.test.createUser();
 
-    uw.source({
-      name: 'test-source',
-      api: 2,
-      async get(context, ids) {
-        return ids.map((id) => ({
-          sourceID: id,
-          artist: `artist ${id}`,
-          title: `title ${id}`,
-          duration: 60,
-          thumbnail: 'https://placedog.net/280',
-        }));
-      },
-      async search() {
-        throw new Error('unimplemented');
-      },
-    });
+    uw.source(testSource);
   });
   afterEach(async () => {
     await uw.destroy();
