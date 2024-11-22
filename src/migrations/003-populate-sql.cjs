@@ -36,6 +36,9 @@ async function up({ context: uw }) {
     User: mongo.model('User', await import('../models/User.js').then((m) => m.default)),
   };
 
+  // For now redis is still required.
+  const motd = await uw.redis.get('motd');
+
   /** @type {Map<string, string>} */
   const idMap = new Map();
 
@@ -44,6 +47,12 @@ async function up({ context: uw }) {
       const { _id: name, ...value } = config;
       await tx.insertInto('configuration')
         .values({ name, value: jsonb(value) })
+        .execute();
+    }
+
+    if (motd != null && motd !== '') {
+      await tx.insertInto('configuration')
+        .values({ name: 'u-wave:motd', value: jsonb(motd) })
         .execute();
     }
 
@@ -233,11 +242,6 @@ async function up({ context: uw }) {
     }
   })
     .finally(() => mongo.disconnect());
-
-  const motd = await uw.redis.get('motd');
-  if (motd != null && motd !== '') {
-    await uw.motd.set(motd);
-  }
 }
 
 /**

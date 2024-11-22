@@ -82,7 +82,7 @@ export function jsonGroupArray(expr) {
 }
 
 /** @type {import('kysely').RawBuilder<Date>} */
-export const now = sql`(strftime('%FT%T', 'now'))`;
+export const now = sql`(strftime('%FT%TZ', 'now'))`;
 
 /** Stringify dates before entering them in the database. */
 class SqliteDateTransformer extends OperationNodeTransformer {
