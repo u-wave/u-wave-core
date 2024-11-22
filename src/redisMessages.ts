@@ -1,5 +1,5 @@
-import { JsonObject } from 'type-fest'; // eslint-disable-line import/no-unresolved, n/no-missing-import, n/no-unpublished-import
-import { HistoryEntryID, PlaylistID, UserID } from './schema';
+import type { JsonObject } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
+import type { HistoryEntryID, PlaylistID, UserID } from './schema.js';
 
 export type ServerActionParameters = {
   'advance:complete': {
