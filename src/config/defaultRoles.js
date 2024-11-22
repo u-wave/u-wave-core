@@ -37,7 +37,9 @@ const manager = [
   'motd.set',
 ];
 
-export default /** @type {Record<string, import("../schema").Permission[]>} */ (/** @type {Record<string, unknown[]>} */ ({
+/** @typedef {Record<string, import("../schema").Permission[]>} PermissionMap */
+
+export default /** @type {PermissionMap} */ (/** @type {Record<string, unknown[]>} */ ({
   admin,
   manager,
   moderator,

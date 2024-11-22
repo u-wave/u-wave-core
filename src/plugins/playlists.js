@@ -658,8 +658,6 @@ class PlaylistsRepository {
    * @returns {Promise<PlaylistItem>}
    */
   async updatePlaylistItem(item, patch = {}, tx = this.#uw.db) {
-    const { db } = this.#uw;
-
     const updatedItem = await tx.updateTable('playlistItems')
       .where('id', '=', item.id)
       .set(patch)
@@ -702,20 +700,16 @@ class PlaylistsRepository {
         }
       }
 
-      let after;
       if ('after' in options) {
-        after = options.after;
         newItemIDs = [
           ...newItemIDs.slice(0, insertIndex + 1),
           ...itemIDsToMove,
           ...newItemIDs.slice(insertIndex + 1),
         ];
       } else if (options.at === 'start') {
-        after = null;
         newItemIDs = [...itemIDsToMove, ...newItemIDs];
       } else {
         newItemIDs = [...newItemIDs, ...itemIDsToMove];
-        after = newItemIDs.at(-1) ?? null;
       }
 
       await tx.updateTable('playlists')

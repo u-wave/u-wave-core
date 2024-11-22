@@ -23,7 +23,9 @@ class MOTD {
    * @returns {Promise<string | null>}
    */
   async get() {
-    const config = /** @type {{ text?: string | null } | null} */ (await this.#uw.config.get(CONFIG_MOTD));
+    const config = /** @type {{ text?: string | null } | null} */ (
+      await this.#uw.config.get(CONFIG_MOTD)
+    );
 
     return config?.text ?? null;
   }

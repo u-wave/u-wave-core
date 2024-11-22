@@ -1,4 +1,4 @@
-import { HTTPError, PlaylistNotFoundError, PlaylistItemNotFoundError } from '../errors/index.js';
+import { HTTPError, PlaylistNotFoundError } from '../errors/index.js';
 import { serializePlaylist, serializePlaylistItem } from '../utils/serialize.js';
 import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
@@ -14,8 +14,14 @@ import toPaginatedResponse from '../utils/toPaginatedResponse.js';
 /**
  * TODO move to a serializer?
  *
- * @param {Pick<import('../schema').PlaylistItem, 'id' | 'artist' | 'title' | 'start' | 'end' | 'createdAt'>} playlistItem
- * @param {Pick<import('../schema').Media, 'id' | 'sourceType' | 'sourceID' | 'sourceData' | 'artist' | 'title' | 'duration' | 'thumbnail'>} media
+ * @param {Pick<
+ *   import('../schema').PlaylistItem,
+ *   'id' | 'artist' | 'title' | 'start' | 'end' | 'createdAt'
+ * >} playlistItem
+ * @param {Pick<
+ *   import('../schema').Media,
+ *   'id' | 'sourceType' | 'sourceID' | 'sourceData' | 'artist' | 'title' | 'duration' | 'thumbnail'
+ * >} media
  */
 export function legacyPlaylistItem(playlistItem, media) {
   return {

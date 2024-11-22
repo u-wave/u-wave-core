@@ -163,7 +163,8 @@ class ConfigStore {
    * Get the current settings for a config group.
    *
    * @param {string} key
-   * @returns {Promise<undefined | JsonObject>} - `undefined` if the config group named `key` does not
+   * @returns {Promise<undefined | JsonObject>}
+   *     `undefined` if the config group named `key` does not
    *     exist. An object containing current settings otherwise.
    * @public
    */

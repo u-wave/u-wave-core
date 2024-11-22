@@ -110,8 +110,8 @@ class Bans {
 
     return new Page(results, {
       pageSize: pagination ? pagination.limit : undefined,
-      filtered: Number(filtered) ?? 0,
-      total: Number(total) ?? 0,
+      filtered: Number(filtered),
+      total: Number(total),
       current: { offset, limit: size },
       next: pagination ? { offset: offset + size, limit: size } : undefined,
       previous: offset > 0

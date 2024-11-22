@@ -154,8 +154,8 @@ export class SqliteDateColumnsPlugin {
   /** @param {import('kysely').PluginTransformResultArgs} args */
   async transformResult(args) {
     for (const row of args.result.rows) {
-      for (let col in row) {
-        if (this.#isDateColumn(col)) {
+      for (let col in row) { // eslint-disable-line no-restricted-syntax
+        if (Object.hasOwn(row, col) && this.#isDateColumn(col)) {
           const value = row[col];
           if (typeof value === 'string') {
             row[col] = new Date(value);
@@ -180,11 +180,11 @@ export async function connect(path) {
     if (typeof items !== 'string') {
       throw new TypeError('json_array_shuffle(): items must be JSON string');
     }
-    items = JSON.parse(items);
-    if (!Array.isArray(items)) {
+    const array = JSON.parse(items);
+    if (!Array.isArray(array)) {
       throw new TypeError('json_array_shuffle(): items must be JSON array');
     }
-    return JSON.stringify(lodash.shuffle(items));
+    return JSON.stringify(lodash.shuffle(array));
   });
   return db;
 }

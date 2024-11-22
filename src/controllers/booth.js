@@ -1,4 +1,3 @@
-import assert from 'node:assert';
 import {
   HTTPError,
   PermissionError,
@@ -230,7 +229,8 @@ async function addVote(uw, historyEntryID, userID, direction) {
       .where('vote', '!=', direction))
     .executeTakeFirst();
 
-  if (result != null && result.numInsertedOrUpdatedRows != null && result.numInsertedOrUpdatedRows > 0n) {
+  if (result != null && result.numInsertedOrUpdatedRows != null
+      && result.numInsertedOrUpdatedRows > 0n) {
     uw.publish('booth:vote', {
       userID, direction,
     });

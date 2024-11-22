@@ -83,7 +83,9 @@ async function getState(req) {
     })
     : Promise.resolve(null);
   const playlists = user ? uw.playlists.getUserPlaylists(user) : null;
-  const firstActivePlaylistItem = activePlaylist.then((playlist) => playlist ? getFirstItem(uw, playlist) : null);
+  const firstActivePlaylistItem = activePlaylist.then((playlist) => (
+    playlist != null ? getFirstItem(uw, playlist) : null
+  ));
   const socketToken = user ? authRegistry.createAuthToken(user) : null;
   const authStrategies = passport.strategies();
   const time = Date.now();

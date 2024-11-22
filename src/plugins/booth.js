@@ -405,7 +405,8 @@ class Booth {
       // and try advancing again.
       if (err instanceof EmptyPlaylistError) {
         this.#logger.info('user has empty playlist, skipping on to the next');
-        await this.#cycleWaitlist(previous != null ? previous.historyEntry.userID : null, { remove });
+        const previousDJ = previous != null ? previous.historyEntry.userID : null;
+        await this.#cycleWaitlist(previousDJ, { remove });
         return this.#advanceLocked({ publish, remove: true }, tx);
       }
       throw err;

@@ -122,6 +122,8 @@ describe('Booth', () => {
       await delay(200);
 
       assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === 1));
+
+      djWs.close();
     });
   });
 });

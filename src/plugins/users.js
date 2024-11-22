@@ -137,7 +137,9 @@ class UsersRepository {
       .execute();
 
     for (const user of users) {
-      const roles = /** @type {string[]} */ (JSON.parse(/** @type {string} */ (/** @type {unknown} */ (user.roles))));
+      const roles = /** @type {string[]} */ (JSON.parse(
+        /** @type {string} */ (/** @type {unknown} */ (user.roles)),
+      ));
       Object.assign(user, { roles });
     }
 
