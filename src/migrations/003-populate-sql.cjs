@@ -4,10 +4,397 @@ const { randomUUID } = require('node:crypto');
 const mongoose = require('mongoose');
 const { sql } = require('kysely');
 
+const { Types } = mongoose.Schema;
+
 /** @param {unknown} value */
 function jsonb(value) {
   return sql`jsonb(${JSON.stringify(value)})`;
 }
+
+/**
+ * @typedef {object} LeanAclRole
+ * @prop {string} _id
+ * @prop {string[]} roles
+ * @typedef {mongoose.Document<LeanAclRole["_id"], {}, LeanAclRole> & LeanAclRole} AclRole
+ */
+
+/**
+ * @type {mongoose.Schema<AclRole, mongoose.Model<AclRole>>}
+ */
+const aclRoleSchema = new mongoose.Schema({
+  _id: String,
+  roles: [{ type: String, ref: 'AclRole', index: true }],
+}, {
+  collection: 'acl_roles',
+  minimize: true,
+});
+
+/**
+ * @typedef {object} LeanAuthentication
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {import('mongodb').ObjectId} user
+ * @prop {string} type
+ * @prop {string} [email]
+ * @prop {string} [hash]
+ * @prop {string} [id]
+ * @prop {string} [avatar]
+ * @typedef {mongoose.Document<LeanAuthentication["_id"], {}, LeanAuthentication> &
+ *           LeanAuthentication} Authentication
+ */
+
+/**
+ * @type {mongoose.Schema<Authentication, mongoose.Model<Authentication>>}
+ */
+const authenticationSchema = new mongoose.Schema({
+  user: { type: Types.ObjectId, ref: 'User', index: true },
+  type: { type: String, required: true, default: 'local' },
+  // Local login
+  email: {
+    type: String, max: 254, unique: true, index: true,
+  },
+  hash: { type: String },
+  // Social login
+  id: { type: String },
+  avatar: { type: String, required: false },
+}, {
+  timestamps: true,
+  minimize: false,
+});
+
+/**
+ * @typedef {object} LeanConfig
+ * @prop {string} _id
+ * @typedef {mongoose.Document<LeanConfig["_id"], {}, LeanConfig> &
+ *           LeanConfig} Config
+ */
+
+/**
+ * @type {mongoose.Schema<Config, mongoose.Model<Config>>}
+ */
+const configSchema = new mongoose.Schema({
+  _id: { type: String },
+}, {
+  collection: 'config_store',
+  strict: false,
+  toJSON: { versionKey: false },
+});
+
+const listOfUsers = [{ type: Types.ObjectId, ref: 'User' }];
+
+/**
+ * @typedef {import('type-fest').JsonObject} HistorySourceData
+ */
+
+/**
+ * @typedef {object} HistoryMedia
+ * @prop {import('mongodb').ObjectId} media
+ *     Reference to the `Media` object that is being played.
+ * @prop {string} artist
+ *     Snapshot of the media artist name at the time this entry was played.
+ * @prop {string} title
+ *     Snapshot of the media title at the time this entry was played.
+ * @prop {number} start
+ *     Time to start playback at.
+ * @prop {number} end
+ *     Time to stop playback at.
+ * @prop {HistorySourceData} sourceData
+ *     Arbitrary source-specific data required for media playback.
+ */
+
+/**
+ * @typedef {object} LeanHistoryEntry
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {import('mongodb').ObjectId} user
+ * @prop {import('mongodb').ObjectId} playlist
+ * @prop {import('mongodb').ObjectId} item
+ * @prop {mongoose.Document<never, {}, HistoryMedia> & HistoryMedia} media
+ * @prop {Date} playedAt
+ * @prop {import('mongodb').ObjectId[]} upvotes
+ * @prop {import('mongodb').ObjectId[]} downvotes
+ * @prop {import('mongodb').ObjectId[]} favorites
+ */
+
+/**
+ * @typedef {mongoose.Document<LeanHistoryEntry["_id"], {}, LeanHistoryEntry> &
+ *           LeanHistoryEntry} HistoryEntry
+ */
+
+/**
+ * @type {mongoose.Schema<HistoryEntry, mongoose.Model<HistoryEntry>>}
+ */
+const historySchema = new mongoose.Schema({
+  user: {
+    type: Types.ObjectId, ref: 'User', required: true, index: true,
+  },
+  playlist: { type: Types.ObjectId, ref: 'Playlist' },
+  item: { type: Types.ObjectId, ref: 'PlaylistItem' },
+  media: {
+    media: { type: Types.ObjectId, ref: 'Media', required: true },
+    artist: {
+      type: String,
+      index: true,
+      /** @type {(name: string) => string} */
+      set: (artist) => artist.normalize('NFKC'),
+    },
+    title: {
+      type: String,
+      index: true,
+      /** @type {(name: string) => string} */
+      set: (title) => title.normalize('NFKC'),
+    },
+    start: { type: Number, default: 0 },
+    end: { type: Number, default: 0 },
+    // Bypass typecheck as JsonObject is a recursive structure & causes infinite looping here.
+    /** @type {any} */
+    sourceData: { type: Object, select: false },
+  },
+  playedAt: { type: Date, default: () => new Date(), index: true },
+  upvotes: listOfUsers,
+  downvotes: listOfUsers,
+  favorites: listOfUsers,
+}, {
+  collection: 'historyentries',
+  minimize: false,
+});
+
+/**
+ * @typedef {object} LeanMedia
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {string} sourceID
+ * @prop {string} sourceType
+ * @prop {object} sourceData
+ * @prop {string} artist
+ * @prop {string} title
+ * @prop {number} duration
+ * @prop {string} thumbnail
+ * @prop {Date} createdAt
+ * @prop {Date} updatedAt
+ * @typedef {mongoose.Document<LeanMedia["_id"], {}, LeanMedia> & LeanMedia} Media
+ */
+
+/**
+ * @type {mongoose.Schema<Media, mongoose.Model<Media>>}
+ */
+const mediaSchema = new mongoose.Schema({
+  sourceID: {
+    type: String, max: 128, required: true, index: true,
+  },
+  sourceType: {
+    type: String, max: 128, required: true, index: true,
+  },
+  sourceData: {},
+  artist: {
+    type: String,
+    max: 128,
+    required: true,
+    /** @type {(name: string) => string} */
+    set: (artist) => artist.normalize('NFKC'),
+  },
+  title: {
+    type: String,
+    max: 128,
+    required: true,
+    /** @type {(name: string) => string} */
+    set: (title) => title.normalize('NFKC'),
+  },
+  duration: { type: Number, min: 0, default: 0 },
+  thumbnail: { type: String, max: 256, default: '' },
+}, {
+  timestamps: true,
+  minimize: false,
+});
+
+/**
+ * @typedef {object} LeanMigration
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {string} migrationName
+ * @prop {Date} createdAt
+ * @prop {Date} updatedAt
+ * @typedef {mongoose.Document<LeanMigration["_id"], {}, LeanMigration> & LeanMigration} Migration
+ */
+
+/**
+ * @type {mongoose.Schema<Migration, mongoose.Model<Migration>>}
+ */
+const migrationSchema = new mongoose.Schema({
+  migrationName: { type: String, required: true },
+}, {
+  timestamps: true,
+  collection: 'migrations',
+});
+
+/**
+ * @typedef {object} LeanPlaylist
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {string} name
+ * @prop {string} description
+ * @prop {import('mongodb').ObjectId} author
+ * @prop {import('mongodb').ObjectId[]} media
+ * @prop {Date} createdAt
+ * @prop {Date} updatedAt
+ * @typedef {mongoose.Document<LeanPlaylist["_id"], {}, LeanPlaylist> & LeanPlaylist & {
+ *  readonly size: number
+ * }} Playlist
+ */
+
+/**
+ * @type {mongoose.Schema<Playlist, mongoose.Model<Playlist>>}
+ */
+const playlistSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    min: 0,
+    max: 128,
+    required: true,
+    /** @type {(name: string) => string} */
+    set: (name) => name.normalize('NFKC'),
+  },
+  description: { type: String, min: 0, max: 512 },
+  author: {
+    type: Types.ObjectId, ref: 'User', required: true, index: true,
+  },
+  media: [{
+    type: Types.ObjectId,
+    ref: 'PlaylistItem',
+    required: true,
+    index: true,
+  }],
+}, {
+  collection: 'playlists',
+  timestamps: true,
+  toJSON: { getters: true },
+  minimize: false,
+});
+
+/**
+ * @typedef {object} LeanPlaylistItem
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {import('mongodb').ObjectId} media
+ * @prop {string} artist
+ * @prop {string} title
+ * @prop {number} start
+ * @prop {number} end
+ * @prop {Date} createdAt
+ * @prop {Date} updatedAt
+ * @typedef {mongoose.Document<LeanPlaylistItem["_id"], {}, LeanPlaylistItem> &
+ *           LeanPlaylistItem} PlaylistItem
+ */
+
+/**
+ * @type {mongoose.Schema<PlaylistItem, mongoose.Model<PlaylistItem>>}
+ */
+const playlistItemSchema = new mongoose.Schema({
+  media: {
+    type: Types.ObjectId,
+    ref: 'Media',
+    required: true,
+    index: true,
+  },
+  artist: {
+    type: String,
+    max: 128,
+    required: true,
+    index: true,
+    /** @type {(name: string) => string} */
+    set: (artist) => artist.normalize('NFKC'),
+  },
+  title: {
+    type: String,
+    max: 128,
+    required: true,
+    index: true,
+    /** @type {(name: string) => string} */
+    set: (title) => title.normalize('NFKC'),
+  },
+  start: { type: Number, min: 0, default: 0 },
+  end: { type: Number, min: 0, default: 0 },
+}, {
+  timestamps: true,
+  minimize: false,
+});
+
+/**
+ * @typedef {object} LeanBanned
+ * @prop {import('mongodb').ObjectId} moderator
+ * @prop {number} duration
+ * @prop {Date} [expiresAt]
+ * @prop {string} reason
+ */
+
+/**
+ * @typedef {object} LeanUser
+ * @prop {import('mongodb').ObjectId} _id
+ * @prop {string} username
+ * @prop {string} language
+ * @prop {string[]} roles
+ * @prop {string} avatar
+ * @prop {string} slug
+ * @prop {import('mongodb').ObjectId|null} activePlaylist
+ * @prop {Date} lastSeenAt
+ * @prop {LeanBanned|undefined} banned
+ * @prop {string|undefined} pendingActivation
+ * @prop {Date} createdAt
+ * @prop {Date} updatedAt
+ * @prop {number} role - Deprecated, do not use
+ * @prop {number} level - Deprecated, do not use
+ * @prop {boolean} exiled - Deprecated, do not use
+ * @typedef {mongoose.Document<LeanUser["_id"], {}, LeanUser> & LeanUser} User
+ */
+
+const bannedSchema = new mongoose.Schema({
+  moderator: { type: Types.ObjectId, ref: 'User', index: true },
+  duration: { type: Number, required: true },
+  expiresAt: { type: Date, required: true, index: true },
+  reason: { type: String, default: '' },
+});
+
+/**
+ * @type {mongoose.Schema<User, mongoose.Model<User, {}, {}>, {}>}
+ */
+const userSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    minlength: [3, 'Usernames have to be at least 3 characters long.'],
+    maxlength: [32, 'Usernames can be at most 32 characters long.'],
+    match: /^[^\s]+$/,
+    required: true,
+    unique: true,
+    index: true,
+    /** @type {(name: string) => string} */
+    set: (name) => name.normalize('NFKC'),
+  },
+  language: {
+    type: String, min: 2, max: 2, default: 'en',
+  },
+  roles: [{ type: String, ref: 'AclRole' }],
+  // Deprecated, `roles` should be used instead.
+  // However some clients (*cough* u-wave-web *cough*) haven't updated to the
+  // ACL system so they need this key to exist.
+  role: { type: Number, min: 0, default: 0 },
+  avatar: {
+    type: String, min: 0, max: 256, default: '',
+  },
+  slug: {
+    type: String,
+    unique: true,
+    required: [true, 'Usernames must not consist of punctuation only.'],
+    index: true,
+  },
+  activePlaylist: {
+    type: Types.ObjectId,
+    ref: 'Playlist',
+  },
+  level: {
+    type: Number, min: 0, max: 9001, default: 0,
+  },
+  lastSeenAt: { type: Date, default: () => new Date() },
+  exiled: { type: Boolean, default: false },
+  banned: bannedSchema,
+  pendingActivation: { type: String, required: false },
+}, {
+  timestamps: true,
+  minimize: false,
+});
 
 /**
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
@@ -25,15 +412,15 @@ async function up({ context: uw }) {
   }
 
   const models = {
-    AclRole: mongo.model('AclRole', await import('../models/AclRole.js').then((m) => m.default)),
-    Authentication: mongo.model('Authentication', await import('../models/Authentication.js').then((m) => m.default)),
-    Config: mongo.model('Config', await import('../models/Config.js').then((m) => m.default)),
-    HistoryEntry: mongo.model('History', await import('../models/History.js').then((m) => m.default)),
-    Media: mongo.model('Media', await import('../models/Media.js').then((m) => m.default)),
-    Migration: mongo.model('Migration', await import('../models/Migration.js').then((m) => m.default)),
-    Playlist: mongo.model('Playlist', await import('../models/Playlist.js').then((m) => m.default)),
-    PlaylistItem: mongo.model('PlaylistItem', await import('../models/PlaylistItem.js').then((m) => m.default)),
-    User: mongo.model('User', await import('../models/User.js').then((m) => m.default)),
+    AclRole: mongo.model('AclRole', aclRoleSchema),
+    Authentication: mongo.model('Authentication', authenticationSchema),
+    Config: mongo.model('Config', configSchema),
+    HistoryEntry: mongo.model('History', historySchema),
+    Media: mongo.model('Media', mediaSchema),
+    Migration: mongo.model('Migration', migrationSchema),
+    Playlist: mongo.model('Playlist', playlistSchema),
+    PlaylistItem: mongo.model('PlaylistItem', playlistItemSchema),
+    User: mongo.model('User', userSchema),
   };
 
   // For now redis is still required.
