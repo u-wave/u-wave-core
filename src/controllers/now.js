@@ -1,5 +1,5 @@
 import { getBoothData } from './booth.js';
-import { serializePlaylist, serializeUser } from '../utils/serialize.js';
+import { serializeCurrentUser, serializePlaylist, serializeUser } from '../utils/serialize.js';
 import { legacyPlaylistItem } from './playlists.js';
 
 /**
@@ -92,7 +92,7 @@ async function getState(req) {
 
   const stateShape = {
     motd,
-    user: user ? serializeUser(user) : null,
+    user: user ? serializeCurrentUser(user) : null,
     users,
     guests,
     roles,

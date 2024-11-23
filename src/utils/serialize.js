@@ -69,7 +69,6 @@ export function serializePlaylistItem(model) {
  *   slug: string,
  *   roles: string[],
  *   avatar: string | null,
- *   activePlaylistID?: string | null,
  *   createdAt: Date,
  *   updatedAt?: Date,
  * }} model
@@ -81,9 +80,28 @@ export function serializeUser(model) {
     slug: model.slug,
     roles: model.roles,
     avatar: model.avatar,
-    activePlaylist: model.activePlaylistID ?? null,
     createdAt: model.createdAt.toISOString() ?? null,
     updatedAt: model.updatedAt?.toISOString() ?? null,
     // lastSeenAt: model.lastSeenAt?.toISOString(),
   };
+}
+
+/**
+ * @param {{
+ *   id: import('../schema.js').UserID,
+ *   username: string,
+ *   slug: string,
+ *   roles: string[],
+ *   avatar: string | null,
+ *   activePlaylistID?: string | null,
+ *   pendingActivation?: boolean | null,
+ *   createdAt: Date,
+ *   updatedAt?: Date,
+ * }} model
+ */
+export function serializeCurrentUser(model) {
+  return Object.assign(serializeUser(model), {
+    activePlaylist: model.activePlaylistID ?? null,
+    pendingActivation: model.pendingActivation ?? false,
+  });
 }

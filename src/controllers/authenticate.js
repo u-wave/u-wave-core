@@ -14,7 +14,7 @@ import {
 } from '../errors/index.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
-import { serializeUser } from '../utils/serialize.js';
+import { serializeCurrentUser } from '../utils/serialize.js';
 
 const { BadRequest } = httpErrors;
 
@@ -47,7 +47,7 @@ function seconds(str) {
  * @type {import('../types.js').Controller}
  */
 async function getCurrentUser(req) {
-  return toItemResponse(req.user != null ? serializeUser(req.user) : null, {
+  return toItemResponse(req.user != null ? serializeCurrentUser(req.user) : null, {
     url: req.fullUrl,
   });
 }
@@ -121,7 +121,7 @@ async function login(req, res) {
     session: sessionType,
   });
 
-  return toItemResponse(user, {
+  return toItemResponse(serializeCurrentUser(user), {
     meta: {
       jwt: sessionType === 'token' ? token : 'cookie',
       socketToken,
@@ -351,7 +351,7 @@ async function register(req) {
     password,
   });
 
-  return toItemResponse(serializeUser(user));
+  return toItemResponse(serializeCurrentUser(user));
 }
 
 /**
