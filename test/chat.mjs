@@ -5,8 +5,7 @@ import createUwave from './utils/createUwave.mjs';
 
 const sandbox = sinon.createSandbox();
 
-// Can't get this to be reliable, skip for now
-describe.skip('Chat', () => {
+describe('Chat', () => {
   let uw;
 
   beforeEach(async () => {
