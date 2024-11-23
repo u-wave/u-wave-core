@@ -162,6 +162,10 @@ async function changeUsername(req) {
   const { username } = req.body;
   const { users } = req.uwave;
 
+  if (id !== moderator.id) {
+    throw new PermissionError();
+  }
+
   const user = await users.updateUser(
     id,
     { username },

@@ -34,6 +34,8 @@ const avatarColumn = (eb) => eb.fn.coalesce(
 );
 
 /**
+ * Translate a SQLite error into a HTTP error explaining the problem.
+ *
  * @param {unknown} err
  * @returns {never}
  */
@@ -404,29 +406,27 @@ class UsersRepository {
     });
     Object.assign(user, update);
 
+    const derivedUpdates = {};
+    if ('username' in update && update.username != null) {
+      derivedUpdates.slug = slugify(update.username);
+    }
+
     const updatesFromDatabase = await db.updateTable('users')
       .where('id', '=', id)
-      .set(update)
-      .returning(['username'])
-      .executeTakeFirst();
+      .set({ ...update, ...derivedUpdates })
+      .returning(['username', 'slug'])
+      .executeTakeFirst()
+      .catch(rethrowInsertError);
     if (!updatesFromDatabase) {
       throw new UserNotFoundError({ id });
     }
     Object.assign(user, updatesFromDatabase);
 
-    // Take updated keys from the Model again,
-    // as it may apply things like Unicode normalization on the values.
-    Object.keys(update).forEach((key) => {
-      // @ts-expect-error Infeasible to statically check properties here
-      // Hopefully the caller took care
-      update[key] = user[key];
-    });
-
     this.#uw.publish('user:update', {
       userID: user.id,
       moderatorID: moderator ? moderator.id : null,
       old,
-      new: update,
+      new: updatesFromDatabase,
     });
 
     return user;
