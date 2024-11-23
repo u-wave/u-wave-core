@@ -8,7 +8,9 @@ uwave:
     banned: 'You have been banned.'
     genericPermission: 'You do not have permission to do that.'
     invalidEmail: The email address is not formatted correctly.
+    emailInUse: The email address is already in use.
     invalidUsername: Invalid username. Names must be 3 to 32 characters long and must not contain spaces.
+    usernameInUse: The username is already in use.
     recaptchaFailed: 'ReCaptcha validation failed, please try again.'
     invalidResetToken: That reset token is invalid. Please double-check your reset token or request a new password reset.
     incorrectPassword: The password is incorrect.

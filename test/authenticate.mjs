@@ -6,6 +6,7 @@ import testKeys from 'recaptcha-test-keys';
 import createUwave from './utils/createUwave.mjs';
 
 const sandbox = sinon.createSandbox();
+const TEST_PASSWORD = 'testtest';
 
 describe('Authentication', () => {
   let uw;
@@ -93,19 +94,19 @@ describe('Authentication', () => {
         .expect(400);
       await supertest(uw.server)
         .post('/api/auth/register')
-        .send({ email: 'name@example.com', username: 'name', password: 'testtest' })
+        .send({ email: 'name@example.com', username: 'name', password: TEST_PASSWORD })
         .expect(200);
 
       await supertest(uw.server)
         .post('/api/auth/register')
-        .send({ email: 'name@example.com', name: 'something with spaces', password: 'testtest' })
+        .send({ email: 'name@example.com', name: 'something with spaces', password: TEST_PASSWORD })
         .expect(400);
     });
 
     it('creates a user', async () => {
       const res = await supertest(uw.server)
         .post('/api/auth/register')
-        .send({ email: 'name@example.com', username: 'name', password: 'testtest' })
+        .send({ email: 'name@example.com', username: 'name', password: TEST_PASSWORD })
         .expect(200);
 
       sinon.assert.match(res.body.data, {
@@ -121,7 +122,7 @@ describe('Authentication', () => {
     it('slugifies names well', async () => {
       const res = await supertest(uw.server)
         .post('/api/auth/register')
-        .send({ email: 'name@example.com', username: '테스트네임', password: 'testtest' })
+        .send({ email: 'name@example.com', username: '테스트네임', password: TEST_PASSWORD })
         .expect(200);
 
       assert.strictEqual(res.body.data.slug, 'teseuteuneim');
@@ -134,7 +135,7 @@ describe('Authentication', () => {
         .send({
           email: 'name@example.com',
           username: 'name',
-          password: 'testtest',
+          password: TEST_PASSWORD,
         })
         .expect(400);
 
@@ -155,13 +156,41 @@ describe('Authentication', () => {
         .send({
           email: 'name@example.com',
           username: 'name',
-          password: 'testtest',
+          password: TEST_PASSWORD,
           grecaptcha: 'sample recaptcha challenge for test :)',
         })
         .expect(200);
 
       assert.strictEqual(goodRes.body.data.username, 'name');
       assert(scope.isDone());
+    });
+
+    it('gracefully rejects duplicate email', async () => {
+      await supertest(uw.server)
+        .post('/api/auth/register')
+        .send({ email: 'name@example.com', username: 'name', password: TEST_PASSWORD })
+        .expect(200);
+
+      const res = await supertest(uw.server)
+        .post('/api/auth/register')
+        .send({ email: 'name@example.com', username: 'unique', password: TEST_PASSWORD })
+        .expect(422);
+
+      sinon.assert.match(res.body.errors[0], { code: 'invalid-email' });
+    });
+
+    it('gracefully rejects duplicate username', async () => {
+      await supertest(uw.server)
+        .post('/api/auth/register')
+        .send({ email: 'name@example.com', username: 'name', password: TEST_PASSWORD })
+        .expect(200);
+
+      const res = await supertest(uw.server)
+        .post('/api/auth/register')
+        .send({ email: 'unique@example.com', username: 'name', password: TEST_PASSWORD })
+        .expect(422);
+
+      sinon.assert.match(res.body.errors[0], { code: 'invalid-username' });
     });
   });
 });
