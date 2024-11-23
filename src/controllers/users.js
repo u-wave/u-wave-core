@@ -9,7 +9,6 @@ import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import toPaginatedResponse from '../utils/toPaginatedResponse.js';
-import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import { muteUser, unmuteUser } from './chat.js';
 
 /**
@@ -163,17 +162,13 @@ async function changeUsername(req) {
   const { username } = req.body;
   const { users } = req.uwave;
 
-  try {
-    const user = await users.updateUser(
-      id,
-      { username },
-      { moderator },
-    );
+  const user = await users.updateUser(
+    id,
+    { username },
+    { moderator },
+  );
 
-    return toItemResponse(user);
-  } catch (error) {
-    throw beautifyDuplicateKeyError(error);
-  }
+  return toItemResponse(user);
 }
 
 /**
