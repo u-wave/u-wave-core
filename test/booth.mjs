@@ -1,10 +1,63 @@
 import assert from 'assert';
+import * as sinon from 'sinon';
 import delay from 'delay';
 import supertest from 'supertest';
 import createUwave from './utils/createUwave.mjs';
 import testSource from './utils/testSource.mjs';
 
 describe('Booth', () => {
+  describe('GET /booth', () => {
+    let uw;
+    beforeEach(async () => {
+      uw = await createUwave('booth');
+    });
+    afterEach(async () => {
+      await uw.destroy();
+    });
+
+    it('is null when nobody is playing', async () => {
+      const res = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      assert.strictEqual(res.body.data, null);
+    });
+
+    it('returns current booth', async () => {
+      uw.source(testSource);
+
+      const user = await uw.test.createUser();
+      await uw.acl.allow(user, ['user']);
+
+      const token = await uw.test.createTestSessionToken(user);
+
+      // Prep the account to be able to join the waitlist
+      const { playlist } = await uw.playlists.createPlaylist(user, { name: 'booth' });
+      {
+        const item = await uw.source('test-source').getOne(user, 'HISTORY');
+        await uw.playlists.addPlaylistItems(playlist, [item]);
+      }
+      const ws = await uw.test.connectToWebSocketAs(user);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: user.id })
+        .expect(200);
+
+      const res = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      sinon.assert.match(res.body.data, {
+        userID: user.id,
+        historyID: sinon.match.string,
+        playedAt: sinon.match.number,
+        media: sinon.match.hasNested('media.sourceID', 'HISTORY'),
+      });
+
+      ws.close();
+    });
+  });
+
   describe('PUT /booth/:historyID/vote', () => {
     let uw;
     beforeEach(async () => {
@@ -124,6 +177,62 @@ describe('Booth', () => {
       assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === 1));
 
       djWs.close();
+    });
+  });
+
+  describe('GET /booth/history', () => {
+    let uw;
+    beforeEach(async () => {
+      uw = await createUwave('booth');
+    });
+    afterEach(async () => {
+      await uw.destroy();
+    });
+
+    it('is empty', async () => {
+      const res = await supertest(uw.server)
+        .get('/api/booth/history')
+        .expect(200);
+      assert.strictEqual(res.body.meta.total, 0);
+      assert.deepStrictEqual(res.body.data, []);
+    });
+
+    it('returns current play', async () => {
+      uw.source(testSource);
+
+      const user = await uw.test.createUser();
+      await uw.acl.allow(user, ['user']);
+
+      const token = await uw.test.createTestSessionToken(user);
+
+      // Prep the account to be able to join the waitlist
+      const { playlist } = await uw.playlists.createPlaylist(user, { name: 'booth' });
+      {
+        const item = await uw.source('test-source').getOne(user, 'HISTORY');
+        await uw.playlists.addPlaylistItems(playlist, [item]);
+      }
+      const ws = await uw.test.connectToWebSocketAs(user);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: user.id })
+        .expect(200);
+
+      const res = await supertest(uw.server)
+        .get('/api/booth/history')
+        .expect(200);
+      sinon.assert.match(res.body.data[0], {
+        user: user.id,
+        _id: sinon.match.string,
+        playedAt: sinon.match.string,
+      });
+      sinon.assert.match(res.body.included, {
+        media: sinon.match.some(sinon.match.has('sourceID', 'HISTORY')),
+        user: sinon.match.some(sinon.match.has('_id', user.id)),
+      });
+
+      ws.close();
     });
   });
 });
