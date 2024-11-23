@@ -1,11 +1,13 @@
+import { randomUUID } from 'crypto';
 import lodash from 'lodash';
+import { sql } from 'kysely';
+import { slugify } from 'transliteration';
 import bcrypt from 'bcryptjs';
 import Page from '../Page.js';
-import { IncorrectPasswordError, UserNotFoundError } from '../errors/index.js';
-import { slugify } from 'transliteration';
+import {
+  IncorrectPasswordError, UsedEmailError, UsedUsernameError, UserNotFoundError,
+} from '../errors/index.js';
 import { jsonGroupArray } from '../utils/sqlite.js';
-import { sql } from 'kysely';
-import { randomUUID } from 'crypto';
 
 const { pick, omit } = lodash;
 
@@ -30,6 +32,24 @@ const avatarColumn = (eb) => eb.fn.coalesce(
   'users.avatar',
   /** @type {import('kysely').RawBuilder<string>} */ (sql`concat('https://sigil.u-wave.net/', ${eb.ref('users.id')})`),
 );
+
+/**
+ * Translate a SQLite error into a HTTP error explaining the problem.
+ *
+ * @param {unknown} err
+ * @returns {never}
+ */
+function rethrowInsertError(err) {
+  if (err instanceof Error && 'code' in err && err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (err.message.includes('users.email')) {
+      throw new UsedEmailError();
+    }
+    if (err.message.includes('users.username') || err.message.includes('users.slug')) {
+      throw new UsedUsernameError();
+    }
+  }
+  throw err;
+}
 
 class UsersRepository {
   #uw;
@@ -290,7 +310,7 @@ class UsersRepository {
 
         return user;
       }
-    });
+    }).catch(rethrowInsertError);
 
     return user;
   }
@@ -307,7 +327,7 @@ class UsersRepository {
 
     const hash = await encryptPassword(password);
 
-    const user = await db.insertInto('users')
+    const insert = db.insertInto('users')
       .values({
         id: /** @type {UserID} */ (randomUUID()),
         username,
@@ -325,8 +345,14 @@ class UsersRepository {
         'users.pendingActivation',
         'users.createdAt',
         'users.updatedAt',
-      ])
-      .executeTakeFirstOrThrow();
+      ]);
+
+    let user;
+    try {
+      user = await insert.executeTakeFirstOrThrow();
+    } catch (err) {
+      rethrowInsertError(err);
+    }
 
     const roles = ['user'];
     await acl.allow(user, roles);
@@ -380,29 +406,27 @@ class UsersRepository {
     });
     Object.assign(user, update);
 
+    const derivedUpdates = {};
+    if ('username' in update && update.username != null) {
+      derivedUpdates.slug = slugify(update.username);
+    }
+
     const updatesFromDatabase = await db.updateTable('users')
       .where('id', '=', id)
-      .set(update)
-      .returning(['username'])
-      .executeTakeFirst();
+      .set({ ...update, ...derivedUpdates })
+      .returning(['username', 'slug'])
+      .executeTakeFirst()
+      .catch(rethrowInsertError);
     if (!updatesFromDatabase) {
       throw new UserNotFoundError({ id });
     }
     Object.assign(user, updatesFromDatabase);
 
-    // Take updated keys from the Model again,
-    // as it may apply things like Unicode normalization on the values.
-    Object.keys(update).forEach((key) => {
-      // @ts-expect-error Infeasible to statically check properties here
-      // Hopefully the caller took care
-      update[key] = user[key];
-    });
-
     this.#uw.publish('user:update', {
       userID: user.id,
       moderatorID: moderator ? moderator.id : null,
       old,
-      new: update,
+      new: updatesFromDatabase,
     });
 
     return user;

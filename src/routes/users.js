@@ -60,6 +60,7 @@ function userRoutes() {
     // PUT /users/:id/username - Change a user's username.
     .put(
       '/:id/username',
+      protect(),
       schema(validations.setUserName),
       rateLimit('change-username', {
         max: 5,
@@ -68,7 +69,7 @@ function userRoutes() {
       }),
       route(controller.changeUsername),
     )
-    // PUT /users/:id/avatar - Change a user's username.
+    // PUT /users/:id/avatar - Change a user's avatar.
     .put(
       '/:id/avatar',
       protect(),

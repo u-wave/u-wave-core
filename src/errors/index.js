@@ -145,9 +145,21 @@ const InvalidEmailError = createErrorClass('InvalidEmailError', {
   base: UnprocessableEntity,
 });
 
+const UsedEmailError = createErrorClass('UsedEmailError', {
+  code: 'invalid-email',
+  string: 'errors.emailInUse',
+  base: UnprocessableEntity,
+});
+
 const InvalidUsernameError = createErrorClass('InvalidUsernameError', {
   code: 'invalid-username',
   string: 'errors.invalidUsername',
+  base: UnprocessableEntity,
+});
+
+const UsedUsernameError = createErrorClass('UsedUsernameError', {
+  code: 'invalid-username',
+  string: 'errors.usernameInUse',
   base: UnprocessableEntity,
 });
 
@@ -269,7 +281,9 @@ export {
   RateLimitError,
   NameChangeRateLimitError,
   InvalidEmailError,
+  UsedEmailError,
   InvalidUsernameError,
+  UsedUsernameError,
   InvalidResetTokenError,
   ReCaptchaError,
   IncorrectPasswordError,

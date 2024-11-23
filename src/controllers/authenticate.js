@@ -12,7 +12,6 @@ import {
   InvalidResetTokenError,
   UserNotFoundError,
 } from '../errors/index.js';
-import beautifyDuplicateKeyError from '../utils/beautifyDuplicateKeyError.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
 import { serializeUser } from '../utils/serialize.js';
@@ -333,30 +332,26 @@ async function register(req) {
     grecaptcha, email, username, password,
   } = req.body;
 
-  try {
-    const recaptchaOptions = req.authOptions.recaptcha;
-    if (recaptchaOptions && recaptchaOptions.secret) {
-      if (grecaptcha) {
-        await verifyCaptcha(grecaptcha, {
-          secret: recaptchaOptions.secret,
-          logger: req.log,
-        });
-      } else {
-        req.log.warn('missing client-side captcha response');
-        throw new ReCaptchaError();
-      }
+  const recaptchaOptions = req.authOptions.recaptcha;
+  if (recaptchaOptions && recaptchaOptions.secret) {
+    if (grecaptcha) {
+      await verifyCaptcha(grecaptcha, {
+        secret: recaptchaOptions.secret,
+        logger: req.log,
+      });
+    } else {
+      req.log.warn('missing client-side captcha response');
+      throw new ReCaptchaError();
     }
-
-    const user = await users.createUser({
-      email,
-      username,
-      password,
-    });
-
-    return toItemResponse(serializeUser(user));
-  } catch (error) {
-    throw beautifyDuplicateKeyError(error);
   }
+
+  const user = await users.createUser({
+    email,
+    username,
+    password,
+  });
+
+  return toItemResponse(serializeUser(user));
 }
 
 /**
