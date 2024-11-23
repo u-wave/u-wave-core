@@ -81,7 +81,6 @@
     "@tsconfig/node18": "^18.2.2",
     "@types/bcryptjs": "^2.4.2",
     "@types/better-sqlite3": "^7.6.4",
-    "@types/cookie": "^1.0.0",
     "@types/cookie-parser": "^1.4.2",
     "@types/cors": "^2.8.10",
     "@types/express": "^5.0.0",
