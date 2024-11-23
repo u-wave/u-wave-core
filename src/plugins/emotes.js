@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import httpErrors from 'http-errors';
 import { AppTokenAuthProvider } from '@twurple/auth';
 import { ApiClient } from '@twurple/api';
-import nodeFetch from 'node-fetch';
 import routes from '../routes/emotes.js';
 
 const { NotFound } = httpErrors;
@@ -61,7 +60,7 @@ class EmoteMap extends Map {
  * @returns {Promise<T>}
  */
 async function fetchJSON(url) {
-  const res = await nodeFetch(url);
+  const res = await fetch(url);
 
   if (!res.ok) {
     if (res.status === 404) {
