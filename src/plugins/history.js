@@ -176,8 +176,8 @@ class HistoryRepository {
 
     return new Page(historyEntries, {
       pageSize: pagination ? pagination.limit : undefined,
-      filtered: Number(total),
-      total: Number(total),
+      filtered: Number(total.count),
+      total: Number(total.count),
       current: { offset, limit },
       next: pagination ? { offset: offset + limit, limit } : undefined,
       previous: offset > 0
