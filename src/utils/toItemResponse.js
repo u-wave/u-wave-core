@@ -1,5 +1,6 @@
 /**
- * @param {object?} item
+ * @template {object|null} T
+ * @param {T} item
  * @param {{ url?: string, meta?: object }} options
  */
 function toItemResponse(item, {
