@@ -187,6 +187,12 @@ const UserNotFoundError = createErrorClass('UserNotFoundError', {
   base: NotFound,
 });
 
+const RoleNotFoundError = createErrorClass('RoleNotFoundError', {
+  code: 'role-not-found',
+  string: 'errors.roleNotFound',
+  base: NotFound,
+});
+
 const PlaylistNotFoundError = createErrorClass('PlaylistNotFoundError', {
   code: 'playlist-not-found',
   string: 'errors.playlistNotFound',
@@ -288,6 +294,7 @@ export {
   ReCaptchaError,
   IncorrectPasswordError,
   UserNotFoundError,
+  RoleNotFoundError,
   PlaylistNotFoundError,
   PlaylistItemNotFoundError,
   HistoryEntryNotFoundError,

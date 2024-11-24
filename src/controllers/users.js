@@ -97,9 +97,9 @@ async function addUserRole(req) {
   const { id, role } = req.params;
   const { acl, users } = req.uwave;
 
-  const selfHasRole = moderator.roles.includes('*') || moderator.roles.includes(role);
-  if (!selfHasRole) {
-    throw new PermissionError({ requiredRole: role });
+  const canModifyRoles = moderator.roles.includes('admin');
+  if (!canModifyRoles) {
+    throw new PermissionError({ requiredRole: 'admin' });
   }
 
   const user = await users.getUser(id);
@@ -128,9 +128,9 @@ async function removeUserRole(req) {
   const { id, role } = req.params;
   const { acl, users } = req.uwave;
 
-  const selfHasRole = moderator.roles.includes('*') || moderator.roles.includes(role);
-  if (!selfHasRole) {
-    throw new PermissionError({ requiredRole: role });
+  const canModifyRoles = moderator.roles.includes('admin');
+  if (!canModifyRoles) {
+    throw new PermissionError({ requiredRole: 'admin' });
   }
 
   const user = await users.getUser(id);

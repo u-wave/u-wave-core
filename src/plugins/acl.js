@@ -1,7 +1,8 @@
 import { sql } from 'kysely';
 import defaultRoles from '../config/defaultRoles.js';
 import routes from '../routes/acl.js';
-import { jsonb, jsonEach } from '../utils/sqlite.js';
+import { isForeignKeyError, jsonb, jsonEach } from '../utils/sqlite.js';
+import { RoleNotFoundError } from '../errors/index.js';
 
 /**
  * @typedef {import('../schema.js').User} User
@@ -124,7 +125,13 @@ class Acl {
         role: roleName,
       })))
       .returningAll()
-      .execute();
+      .execute()
+      .catch((err) => {
+        if (isForeignKeyError(err)) {
+          throw new RoleNotFoundError();
+        }
+        throw err;
+      });
 
     this.#uw.publish('acl:allow', {
       userID: user.id,

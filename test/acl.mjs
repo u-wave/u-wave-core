@@ -3,6 +3,8 @@ import supertest from 'supertest';
 import * as sinon from 'sinon';
 import createUwave from './utils/createUwave.mjs';
 
+const FAKE_USER_ID = '4bdfdf14-df8d-4929-a49c-8fbe6cbe3f90';
+
 describe('ACL', () => {
   let user;
   let uw;
@@ -216,6 +218,122 @@ describe('ACL', () => {
       assert(!Object.keys(res.body.data).includes('testRole'));
 
       assert(!await uw.acl.isAllowed(user, 'test.permission2'));
+    });
+  });
+
+  describe('PUT /users/:id/roles/:role', () => {
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .put(`/api/users/${FAKE_USER_ID}/roles/testRole`)
+        .expect(401);
+    });
+
+    it('returns 404 for nonexistent user', async () => {
+      await uw.acl.createRole('testRole', ['test.permission']);
+      await uw.acl.allow(user, ['admin']);
+
+      const token = await uw.test.createTestSessionToken(user);
+      const res = await supertest(uw.server)
+        .put(`/api/users/${FAKE_USER_ID}/roles/testRole`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'user-not-found')),
+      });
+    });
+
+    it('returns 404 for nonexistent role', async () => {
+      await uw.acl.allow(user, ['admin']);
+
+      const otherUser = await uw.test.createUser();
+
+      const token = await uw.test.createTestSessionToken(user);
+      const res = await supertest(uw.server)
+        .put(`/api/users/${otherUser.id}/roles/nonexistentrole`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'role-not-found')),
+      });
+    });
+
+    it('adds the role', async () => {
+      await uw.acl.allow(user, ['admin']);
+
+      const otherUser = await uw.test.createUser();
+
+      const token = await uw.test.createTestSessionToken(user);
+      const beforeRes = await supertest(uw.server)
+        .get(`/api/users/${otherUser.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(beforeRes.body.data, {
+        roles: [],
+      });
+
+      await supertest(uw.server)
+        .put(`/api/users/${otherUser.id}/roles/user`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      const afterRes = await supertest(uw.server)
+        .get(`/api/users/${otherUser.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(afterRes.body.data, {
+        roles: ['user'],
+      });
+    });
+  });
+
+  describe('DELETE /users/:id/roles/:role', () => {
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .delete(`/api/users/${FAKE_USER_ID}/roles/testRole`)
+        .expect(401);
+    });
+
+    it('returns 404 for nonexistent user', async () => {
+      await uw.acl.createRole('testRole', ['test.permission']);
+      await uw.acl.allow(user, ['admin']);
+
+      const token = await uw.test.createTestSessionToken(user);
+      const res = await supertest(uw.server)
+        .delete(`/api/users/${FAKE_USER_ID}/roles/testRole`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'user-not-found')),
+      });
+    });
+
+    it('removes the role', async () => {
+      await uw.acl.allow(user, ['admin']);
+
+      const otherUser = await uw.test.createUser();
+      await uw.acl.allow(otherUser, ['user', 'moderator']);
+
+      const token = await uw.test.createTestSessionToken(user);
+      const beforeRes = await supertest(uw.server)
+        .get(`/api/users/${otherUser.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(beforeRes.body.data, {
+        roles: ['moderator', 'user'],
+      });
+
+      await supertest(uw.server)
+        .delete(`/api/users/${otherUser.id}/roles/user`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      const afterRes = await supertest(uw.server)
+        .get(`/api/users/${otherUser.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(afterRes.body.data, {
+        roles: ['moderator'],
+      });
     });
   });
 });
