@@ -15,6 +15,7 @@ uwave:
     invalidResetToken: That reset token is invalid. Please double-check your reset token or request a new password reset.
     incorrectPassword: The password is incorrect.
     userNotFound: User not found.
+    roleNotFound: Role not found.
     playlistNotFound: Playlist not found.
     playlistItemNotFound: Playlist item not found.
     itemNotInPlaylist: Item not in playlist.

@@ -188,3 +188,11 @@ export async function connect(path) {
   });
   return db;
 }
+
+/**
+ * @param {unknown} err
+ * @returns {err is (Error & { code: 'SQLITE_CONSTRAINT_FOREIGNKEY' })}
+ */
+export function isForeignKeyError(err) {
+  return err instanceof Error && 'code' in err && err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY';
+}
