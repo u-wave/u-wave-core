@@ -6,6 +6,7 @@ import createUwave from './utils/createUwave.mjs';
 
 const sandbox = sinon.createSandbox();
 
+/** Retry the `fn` until it doesn't throw, or until the duration in milliseconds has elapsed. */
 async function retryFor(duration, fn) {
   const end = Date.now() + duration;
   let caughtError;
@@ -16,7 +17,7 @@ async function retryFor(duration, fn) {
     } catch (err) {
       caughtError = err;
     }
-    await delay(100);
+    await delay(10);
   }
 
   if (caughtError != null) {
