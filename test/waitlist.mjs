@@ -150,6 +150,34 @@ describe('Waitlist', () => {
       sinon.assert.match(res.body.errors[0], { code: 'already-in-waitlist' });
     });
 
+    it('requires waitlist.join permission to join', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      await createTestPlaylistItem(user);
+
+      const ws = await uw.test.connectToWebSocketAs(user);
+
+      await uw.acl.createRole('waitlistJoiner', ['waitlist.join']);
+
+      const notAllowedRes = await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: user.id })
+        .expect(403);
+      sinon.assert.match(notAllowedRes.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'forbidden')),
+      });
+
+      await uw.acl.allow(user, ['waitlistJoiner']);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: user.id })
+        .expect(200);
+
+      ws.close();
+    });
+
     it('requires the waitlist.add role to add other users', async () => {
       const token = await uw.test.createTestSessionToken(user);
       await uw.acl.allow(user, ['user']);
@@ -174,6 +202,154 @@ describe('Waitlist', () => {
         .post('/api/waitlist')
         .set('Cookie', `uwsession=${token}`)
         .send({ userID: testSubject.id })
+        .expect(200);
+    });
+
+    it('prevents joining when waitlist is locked', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      const joiner = await uw.test.createUser();
+      const joinerToken = await uw.test.createTestSessionToken(joiner);
+
+      await uw.acl.createRole('waitlistJoiner', ['waitlist.join']);
+      await uw.acl.createRole('waitlistLocker', ['waitlist.lock']);
+
+      await uw.acl.allow(joiner, ['waitlistJoiner']);
+      await uw.acl.allow(user, ['waitlistLocker']);
+
+      const ws = await uw.test.connectToWebSocketAs(joiner);
+      await createTestPlaylistItem(joiner);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: true })
+        .expect(200);
+
+      const lockedRes = await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${joinerToken}`)
+        .send({ userID: joiner.id })
+        .expect(403);
+      sinon.assert.match(lockedRes.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'waitlist-locked')),
+      });
+
+      // Unlock & try again
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: false })
+        .expect(200);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${joinerToken}`)
+        .send({ userID: joiner.id })
+        .expect(200);
+
+      ws.close();
+    });
+
+    it('requires waitlist.join.locked permission to join if locked', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      const joiner = await uw.test.createUser();
+      const joinerToken = await uw.test.createTestSessionToken(joiner);
+
+      await uw.acl.createRole('waitlistJoiner', ['waitlist.join']);
+      await uw.acl.createRole('waitlistSuperJoiner', ['waitlist.join.locked']);
+      await uw.acl.createRole('waitlistLocker', ['waitlist.lock']);
+
+      await uw.acl.allow(joiner, ['waitlistJoiner']);
+      await uw.acl.allow(user, ['waitlistLocker']);
+
+      const ws = await uw.test.connectToWebSocketAs(joiner);
+      await createTestPlaylistItem(joiner);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: true })
+        .expect(200);
+
+      const lockedRes = await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${joinerToken}`)
+        .send({ userID: joiner.id })
+        .expect(403);
+      sinon.assert.match(lockedRes.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'waitlist-locked')),
+      });
+
+      await uw.acl.allow(joiner, ['waitlistSuperJoiner']);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${joinerToken}`)
+        .send({ userID: joiner.id })
+        .expect(200);
+
+      ws.close();
+    });
+  });
+
+  describe('PUT /waitlist/lock', () => {
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .expect(401);
+    });
+
+    it('requires the waitlist.lock role', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('waitlistLocker', ['waitlist.lock']);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: true })
+        .expect(403);
+
+      await uw.acl.allow(user, ['waitlistLocker']);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: true })
+        .expect(200);
+    });
+
+    it('validates input', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('waitlistLocker', ['waitlist.lock']);
+      await uw.acl.allow(user, ['waitlistLocker']);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: 'not a boolean' })
+        .expect(400);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .expect(400);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ no: 'lock property' })
+        .expect(400);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: false })
+        .expect(200);
+
+      await supertest(uw.server)
+        .put('/api/waitlist/lock')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ lock: true })
         .expect(200);
     });
   });
