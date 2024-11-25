@@ -4,6 +4,7 @@ import delay from 'delay';
 import supertest from 'supertest';
 import createUwave from './utils/createUwave.mjs';
 import testSource from './utils/testSource.mjs';
+import { retryFor } from './utils/retry.mjs';
 
 describe('Booth', () => {
   describe('GET /booth', () => {
@@ -149,9 +150,10 @@ describe('Booth', () => {
         .set('Cookie', `uwsession=${token}`)
         .send({ direction: -1 })
         .expect(200);
-      await delay(200);
 
-      assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === -1));
+      await retryFor(500, () => {
+        assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === -1));
+      });
 
       // Resubmit vote without changing
       receivedMessages.length = 0;
@@ -160,8 +162,10 @@ describe('Booth', () => {
         .set('Cookie', `uwsession=${token}`)
         .send({ direction: -1 })
         .expect(200);
-      await delay(200);
 
+      // Need to just wait, as we can't assert for the absence of something happening
+      // without waiting the whole time limit
+      await delay(200);
       assert(
         !receivedMessages.some((message) => message.command === 'vote' && message.data.value === -1),
         'should not have re-emitted the vote',
@@ -172,9 +176,10 @@ describe('Booth', () => {
         .set('Cookie', `uwsession=${token}`)
         .send({ direction: 1 })
         .expect(200);
-      await delay(200);
 
-      assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === 1));
+      await retryFor(500, () => {
+        assert(receivedMessages.some((message) => message.command === 'vote' && message.data.value === 1));
+      });
 
       djWs.close();
     });
