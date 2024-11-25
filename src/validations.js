@@ -148,16 +148,6 @@ export const leaveBooth = /** @type {const} */ ({
   },
 });
 
-export const replaceBooth = /** @type {const} */ ({
-  body: {
-    type: 'object',
-    properties: {
-      userID: { $ref: 'https://ns.u-wave.net/schemas/definitions.json#/definitions/UUID' },
-    },
-    required: ['userID'],
-  },
-});
-
 export const getVote = /** @type {const} */ ({
   params: {
     type: 'object',

@@ -175,40 +175,6 @@ async function leaveBooth(req) {
 }
 
 /**
- * @typedef {object} ReplaceBoothBody
- * @prop {UserID} userID
- */
-
-/**
- * @type {import('../types.js').AuthenticatedController<{}, {}, ReplaceBoothBody>}
- */
-async function replaceBooth(req) {
-  const uw = req.uwave;
-  const moderatorID = req.user.id;
-  const { userID } = req.body;
-  let waitlist = await uw.redis.lrange('waitlist', 0, -1);
-
-  if (!waitlist.length) {
-    throw new HTTPError(404, 'Waitlist is empty.');
-  }
-
-  if (waitlist.includes(userID)) {
-    uw.redis.lrem('waitlist', 1, userID);
-    await uw.redis.lpush('waitlist', userID);
-    waitlist = await uw.redis.lrange('waitlist', 0, -1);
-  }
-
-  uw.publish('booth:replace', {
-    moderatorID,
-    userID,
-  });
-
-  await uw.booth.advance();
-
-  return toItemResponse({});
-}
-
-/**
  * @param {import('../Uwave.js').default} uw
  * @param {HistoryEntryID} historyEntryID
  * @param {UserID} userID
@@ -428,7 +394,6 @@ export {
   getHistory,
   getVote,
   leaveBooth,
-  replaceBooth,
   skipBooth,
   socketVote,
   vote,
