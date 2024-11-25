@@ -2,29 +2,10 @@ import { randomUUID } from 'crypto';
 import assert from 'assert';
 import * as sinon from 'sinon';
 import supertest from 'supertest';
-import delay from 'delay';
 import createUwave from './utils/createUwave.mjs';
+import { retryFor } from './utils/retry.mjs';
 
 const sandbox = sinon.createSandbox();
-
-/** Retry the `fn` until it doesn't throw, or until the duration in milliseconds has elapsed. */
-async function retryFor(duration, fn) {
-  const end = Date.now() + duration;
-  let caughtError;
-  while (Date.now() < end) {
-    try {
-      const result = await fn();
-      return result;
-    } catch (err) {
-      caughtError = err;
-    }
-    await delay(10);
-  }
-
-  if (caughtError != null) {
-    throw new Error(`Failed after ${duration}ms`, { cause: caughtError });
-  }
-}
 
 describe('Chat', () => {
   let uw;
