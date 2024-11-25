@@ -2,8 +2,27 @@ import assert from 'assert';
 import * as sinon from 'sinon';
 import delay from 'delay';
 import createUwave from './utils/createUwave.mjs';
+import supertest from 'supertest';
 
 const sandbox = sinon.createSandbox();
+
+async function retryFor(duration, fn) {
+  const end = Date.now() + duration;
+  let caughtError;
+  while (Date.now() < end) {
+    try {
+      const result = await fn();
+      return result;
+    } catch (err) {
+      caughtError = err;
+    }
+    await delay(100);
+  }
+
+  if (caughtError != null) {
+    throw new Error(`Failed after ${duration}ms`, { cause: caughtError });
+  }
+}
 
 describe('Chat', () => {
   let uw;
@@ -27,18 +46,23 @@ describe('Chat', () => {
     });
 
     ws.send(JSON.stringify({ command: 'sendChat', data: 'Message text' }));
-    await delay(500);
 
-    assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id && message.data.message === 'Message text'));
+    await retryFor(1500, async () => {
+      assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id && message.data.message === 'Message text'));
+    });
   });
 
   it('does not broadcast chat messages from muted users', async () => {
     const user = await uw.test.createUser();
+    const token = await uw.test.createTestSessionToken(user);
+    await uw.acl.allow(user, ['admin']);
     const mutedUser = await uw.test.createUser();
 
-    const stub = sandbox.stub(uw.chat, 'isMuted');
-    stub.withArgs(sinon.match({ id: user.id })).resolves(false);
-    stub.withArgs(sinon.match({ id: mutedUser.id })).resolves(true);
+    await supertest(uw.server)
+      .post(`/api/users/${mutedUser.id}/mute`)
+      .set('Cookie', `uwsession=${token}`)
+      .send({ time: 60 /* seconds */ })
+      .expect(200);
 
     const ws = await uw.test.connectToWebSocketAs(user);
     const mutedWs = await uw.test.connectToWebSocketAs(mutedUser);
@@ -51,9 +75,9 @@ describe('Chat', () => {
     ws.send(JSON.stringify({ command: 'sendChat', data: 'unmuted' }));
     mutedWs.send(JSON.stringify({ command: 'sendChat', data: 'muted' }));
 
-    await delay(1500);
-
-    assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id));
-    assert(!receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === mutedUser.id));
+    await retryFor(1500, async () => {
+      assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id));
+      assert(!receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === mutedUser.id));
+    });
   });
 });
