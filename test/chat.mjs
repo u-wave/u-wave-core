@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import assert from 'assert';
 import * as sinon from 'sinon';
 import supertest from 'supertest';
@@ -48,7 +49,7 @@ describe('Chat', () => {
 
     ws.send(JSON.stringify({ command: 'sendChat', data: 'Message text' }));
 
-    await retryFor(1500, async () => {
+    await retryFor(1500, () => {
       assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id && message.data.message === 'Message text'));
     });
   });
@@ -76,9 +77,173 @@ describe('Chat', () => {
     ws.send(JSON.stringify({ command: 'sendChat', data: 'unmuted' }));
     mutedWs.send(JSON.stringify({ command: 'sendChat', data: 'muted' }));
 
-    await retryFor(1500, async () => {
+    await retryFor(1500, () => {
       assert(receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === user.id));
       assert(!receivedMessages.some((message) => message.command === 'chatMessage' && message.data.userID === mutedUser.id));
+    });
+  });
+
+  describe('DELETE /chat/', () => {
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .delete('/api/chat')
+        .expect(401);
+    });
+
+    it('requires the chat.delete permission', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      await supertest(uw.server)
+        .delete('/api/chat')
+        .set('Cookie', `uwsession=${token}`)
+        .expect(403);
+
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      await supertest(uw.server)
+        .delete('/api/chat')
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+    });
+
+    it('broadcasts delete messages', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      const otherUser = await uw.test.createUser();
+      const ws = await uw.test.connectToWebSocketAs(otherUser);
+
+      const receivedMessages = [];
+      ws.on('message', (data) => {
+        receivedMessages.push(JSON.parse(data));
+      });
+
+      await supertest(uw.server)
+        .delete('/api/chat')
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      await retryFor(1500, () => {
+        sinon.assert.match(receivedMessages, sinon.match.some(sinon.match.has('command', 'chatDelete')));
+      });
+    });
+  });
+
+  describe('DELETE /chat/user/:id', () => {
+    it('requires authentication', async () => {
+      const user = await uw.test.createUser();
+
+      await supertest(uw.server)
+        .delete(`/api/chat/user/${user.id}`)
+        .expect(401);
+    });
+
+    it('requires the chat.delete permission', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      await supertest(uw.server)
+        .delete(`/api/chat/user/${user.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(403);
+
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      await supertest(uw.server)
+        .delete(`/api/chat/user/${user.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+    });
+
+    it('broadcasts delete messages', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      const otherUser = await uw.test.createUser();
+      const ws = await uw.test.connectToWebSocketAs(otherUser);
+
+      const receivedMessages = [];
+      ws.on('message', (data) => {
+        receivedMessages.push(JSON.parse(data));
+      });
+
+      await supertest(uw.server)
+        .delete(`/api/chat/user/${otherUser.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      await retryFor(1500, () => {
+        sinon.assert.match(receivedMessages, sinon.match.some(sinon.match({
+          command: 'chatDeleteByUser',
+          data: sinon.match({
+            userID: otherUser.id,
+          }),
+        })));
+      });
+    });
+  });
+
+  describe('DELETE /chat/:id', () => {
+    const messageID = randomUUID();
+
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .delete(`/api/chat/${messageID}`)
+        .expect(401);
+    });
+
+    it('requires the chat.delete permission', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      await supertest(uw.server)
+        .delete(`/api/chat/${messageID}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(403);
+
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      await supertest(uw.server)
+        .delete(`/api/chat/${messageID}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+    });
+
+    it('broadcasts delete messages', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.createRole('chatDeleter', ['chat.delete']);
+      await uw.acl.allow(user, ['chatDeleter']);
+
+      const otherUser = await uw.test.createUser();
+      const ws = await uw.test.connectToWebSocketAs(otherUser);
+
+      const receivedMessages = [];
+      ws.on('message', (data) => {
+        receivedMessages.push(JSON.parse(data));
+      });
+
+      await supertest(uw.server)
+        .delete(`/api/chat/${messageID}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      await retryFor(1500, () => {
+        sinon.assert.match(receivedMessages, sinon.match.some(sinon.match({
+          command: 'chatDeleteByID',
+          data: sinon.match({
+            _id: messageID,
+          }),
+        })));
+      });
     });
   });
 });
