@@ -1,8 +1,8 @@
 import assert from 'assert';
 import * as sinon from 'sinon';
+import supertest from 'supertest';
 import delay from 'delay';
 import createUwave from './utils/createUwave.mjs';
-import supertest from 'supertest';
 
 const sandbox = sinon.createSandbox();
 
