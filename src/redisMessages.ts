@@ -27,10 +27,6 @@ export type ServerActionParameters = {
     moderatorID: UserID | null,
     reason: string | null,
   },
-  'booth:replace': {
-    userID: UserID,
-    moderatorID: UserID | null,
-  },
 
   'chat:message': {
     id: string,
