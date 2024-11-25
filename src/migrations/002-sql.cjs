@@ -16,6 +16,11 @@ async function up({ context: uw }) {
     .addColumn('value', 'jsonb')
     .execute();
 
+  await db.schema.createTable('keyval')
+    .addColumn('key', 'text', (col) => col.primaryKey())
+    .addColumn('value', 'jsonb')
+    .execute();
+
   await db.schema.createTable('media')
     .addColumn('id', 'uuid', (col) => col.primaryKey())
     .addColumn('source_type', 'text', (col) => col.notNull())
