@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import minimist from 'minimist';
 import concat from 'concat-stream';
 import explain from 'explain-error';
@@ -79,6 +80,15 @@ async function start() {
 
   await uw.listen();
   logger.info('Now listening', { port });
+
+  await once(process, 'SIGINT');
+
+  /** @type {import('../src/Uwave.js').Boot} */ (uw).close((err) => {
+    if (err != null) {
+      console.error(err);
+      process.exitCode = 1;
+    }
+  });
 }
 
 await start();
