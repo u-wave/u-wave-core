@@ -102,6 +102,9 @@ async function httpApi(uw, options) {
     authRegistry: new AuthRegistry(uw.redis),
   });
 
+  uw.express = express();
+  uw.express.set('query parser', /** @param {string} str */ (str) => qs.parse(str, { depth: 1 }));
+
   uw.httpApi
     .use(pinoHttp({
       genReqId: () => randomUUID(),
@@ -114,6 +117,10 @@ async function httpApi(uw, options) {
       secret: options.secret,
       resave: false,
       saveUninitialized: false,
+      cookie: {
+        secure: uw.express.get('env') === 'production',
+        httpOnly: true,
+      },
     }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
@@ -135,9 +142,6 @@ async function httpApi(uw, options) {
     .use('/search', search())
     .use('/server', server())
     .use('/users', users());
-
-  uw.express = express();
-  uw.express.set('query parser', /** @param {string} str */ (str) => qs.parse(str, { depth: 1 }));
 
   uw.server = http.createServer(uw.express);
   if (options.helmet !== false) {
