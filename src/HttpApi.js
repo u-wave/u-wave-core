@@ -6,6 +6,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
+import session from 'express-session';
 import qs from 'qs';
 import { pinoHttp } from 'pino-http';
 
@@ -101,6 +102,9 @@ async function httpApi(uw, options) {
     authRegistry: new AuthRegistry(uw.redis),
   });
 
+  uw.express = express();
+  uw.express.set('query parser', /** @param {string} str */ (str) => qs.parse(str, { depth: 1 }));
+
   uw.httpApi
     .use(pinoHttp({
       genReqId: () => randomUUID(),
@@ -109,6 +113,15 @@ async function httpApi(uw, options) {
     }))
     .use(bodyParser.json())
     .use(cookieParser())
+    .use(session({
+      secret: options.secret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: uw.express.get('env') === 'production',
+        httpOnly: true,
+      },
+    }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
     .use(attachUwaveMeta(uw.httpApi, uw))
@@ -129,9 +142,6 @@ async function httpApi(uw, options) {
     .use('/search', search())
     .use('/server', server())
     .use('/users', users());
-
-  uw.express = express();
-  uw.express.set('query parser', /** @param {string} str */ (str) => qs.parse(str, { depth: 1 }));
 
   uw.server = http.createServer(uw.express);
   if (options.helmet !== false) {

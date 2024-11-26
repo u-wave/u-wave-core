@@ -1,3 +1,4 @@
+import { promisify } from 'node:util';
 import cookie from 'cookie';
 import jwt from 'jsonwebtoken';
 import randomString from 'random-string';
@@ -457,6 +458,9 @@ async function logout(req, res) {
     });
     res.setHeader('Set-Cookie', serialized);
   }
+
+  const passportLogout = promisify(req.logout.bind(req));
+  await passportLogout();
 
   return toItemResponse({});
 }
