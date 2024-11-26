@@ -6,7 +6,7 @@ import jsonMergePatch from 'json-merge-patch';
 import sjson from 'secure-json-parse';
 import ValidationError from '../errors/ValidationError.js';
 import { sql } from 'kysely';
-import { jsonb } from '../utils/sqlite.js';
+import { fromJson, json, jsonb } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('type-fest').JsonObject} JsonObject
@@ -114,7 +114,7 @@ class ConfigStore {
 
     const previous = await db.transaction().execute(async (tx) => {
       const row = await tx.selectFrom('configuration')
-        .select(sql`json(value)`.as('value'))
+        .select((eb) => json(eb.ref('value')).as('value'))
         .where('name', '=', name)
         .executeTakeFirst();
 
@@ -123,7 +123,7 @@ class ConfigStore {
         .onConflict((oc) => oc.column('name').doUpdateSet({ value: jsonb(value) }))
         .execute();
 
-      return row?.value != null ? JSON.parse(/** @type {string} */ (row.value)) : null;
+      return row?.value != null ? fromJson(row.value) : null;
     });
 
     return previous;
@@ -137,14 +137,14 @@ class ConfigStore {
     const { db } = this.#uw;
 
     const row = await db.selectFrom('configuration')
-      .select(sql`json(value)`.as('value'))
+      .select((eb) => json(eb.ref('value')).as('value'))
       .where('name', '=', key)
       .executeTakeFirst();
-    if (!row) {
+    if (row == null || row.value == null) {
       return null;
     }
 
-    return JSON.parse(/** @type {string} */ (row.value));
+    return fromJson(row.value);
   }
 
   /**

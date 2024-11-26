@@ -10,7 +10,13 @@ import routes from '../routes/playlists.js';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import {
-  arrayCycle, jsonb, jsonEach, jsonLength, arrayShuffle as arrayShuffle,
+  arrayCycle,
+  arrayShuffle as arrayShuffle,
+  fromJson,
+  json,
+  jsonb,
+  jsonEach,
+  jsonLength,
 } from '../utils/sqlite.js';
 import Multimap from '../utils/Multimap.js';
 
@@ -23,6 +29,7 @@ import Multimap from '../utils/Multimap.js';
  * @typedef {import('../schema.js').Playlist} Playlist
  * @typedef {import('../schema.js').PlaylistItem} PlaylistItem
  * @typedef {import('../schema.js').Media} Media
+ * @typedef {import('../schema.js').Database} Database
  */
 
 /**
@@ -39,7 +46,7 @@ import Multimap from '../utils/Multimap.js';
  * Calculate valid start/end times for a playlist item.
  *
  * @param {PlaylistItemDesc} item
- * @param {Media} media
+ * @param {Pick<Media, 'duration'>} media
  */
 function getStartEnd(item, media) {
   let { start, end } = item;
@@ -61,7 +68,8 @@ const playlistItemSelection = /** @type {const} */ ([
   'media.id as media.id',
   'media.sourceID as media.sourceID',
   'media.sourceType as media.sourceType',
-  'media.sourceData as media.sourceData',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'media'>} eb */
+  (eb) => json(eb.fn.coalesce(eb.ref('media.sourceData'), jsonb(null))).as('media.sourceData'),
   'media.artist as media.artist',
   'media.title as media.title',
   'media.duration as media.duration',
@@ -74,13 +82,26 @@ const playlistItemSelection = /** @type {const} */ ([
   'playlistItems.updatedAt',
 ]);
 
+const mediaSelection = /** @type {const} */ ([
+  'id',
+  'sourceType',
+  'sourceID',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'media'>} eb */
+  (eb) => json(eb.fn.coalesce(eb.ref('sourceData'), jsonb(null))).as('sourceData'),
+  'artist',
+  'title',
+  'duration',
+  'thumbnail',
+]);
+
 /**
  * @param {{
  *   id: PlaylistItemID,
  *   'media.id': MediaID,
  *   'media.sourceID': string,
  *   'media.sourceType': string,
- *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.sourceData': import('../utils/sqlite.js').SerializedJSON<
+ *       import('type-fest').JsonObject | null>,
  *   'media.artist': string,
  *   'media.title': string,
  *   'media.duration': number,
@@ -106,7 +127,7 @@ function playlistItemFromSelection(raw) {
       thumbnail: raw['media.thumbnail'],
       sourceID: raw['media.sourceID'],
       sourceType: raw['media.sourceType'],
-      sourceData: raw['media.sourceData'],
+      sourceData: fromJson(raw['media.sourceData']),
     },
   };
 }
@@ -117,7 +138,8 @@ function playlistItemFromSelection(raw) {
  *   'media.id': MediaID,
  *   'media.sourceID': string,
  *   'media.sourceType': string,
- *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.sourceData': import('../utils/sqlite.js').SerializedJSON<
+ *       import('type-fest').JsonObject | null>,
  *   'media.artist': string,
  *   'media.title': string,
  *   'media.duration': number,
@@ -150,8 +172,33 @@ function playlistItemFromSelectionNew(raw) {
       thumbnail: raw['media.thumbnail'],
       sourceID: raw['media.sourceID'],
       sourceType: raw['media.sourceType'],
-      sourceData: raw['media.sourceData'],
+      sourceData: fromJson(raw['media.sourceData']),
     },
+  };
+}
+
+/**
+ * @param {{
+ *   id: MediaID,
+ *   sourceID: string,
+ *   sourceType: string,
+ *   sourceData: import('../utils/sqlite.js').SerializedJSON<import('type-fest').JsonObject | null>,
+ *   artist: string,
+ *   title: string,
+ *   duration: number,
+ *   thumbnail: string,
+ * }} raw
+ */
+function mediaFromRow(raw) {
+  return {
+    id: raw.id,
+    sourceID: raw.sourceID,
+    sourceType: raw.sourceType,
+    sourceData: fromJson(raw.sourceData),
+    artist: raw.artist,
+    title: raw.title,
+    duration: raw.duration,
+    thumbnail: raw.thumbnail,
   };
 }
 
@@ -505,19 +552,19 @@ class PlaylistsRepository {
     // Group by source so we can retrieve all unknown medias from the source in
     // one call.
     const itemsBySourceType = ObjectGroupBy(items, (item) => item.sourceType);
-    /** @type {Map<string, Media>} */
+    /** @type {Map<string, Omit<Media, 'createdAt' | 'updatedAt'>>} */
     const allMedias = new Map();
     const promises = Object.entries(itemsBySourceType).map(async ([sourceType, sourceItems]) => {
       const knownMedias = await db.selectFrom('media')
         .where('sourceType', '=', sourceType)
         .where('sourceID', 'in', sourceItems.map((item) => String(item.sourceID)))
-        .selectAll()
+        .select(mediaSelection)
         .execute();
 
       /** @type {Set<string>} */
       const knownMediaIDs = new Set();
       knownMedias.forEach((knownMedia) => {
-        allMedias.set(`${knownMedia.sourceType}:${knownMedia.sourceID}`, knownMedia);
+        allMedias.set(`${knownMedia.sourceType}:${knownMedia.sourceID}`, mediaFromRow(knownMedia));
         knownMediaIDs.add(knownMedia.sourceID);
       });
 
@@ -538,16 +585,16 @@ class PlaylistsRepository {
               id: /** @type {MediaID} */ (randomUUID()),
               sourceType: media.sourceType,
               sourceID: media.sourceID,
-              sourceData: jsonb(media.sourceData),
+              sourceData: media.sourceData == null ? null : jsonb(media.sourceData),
               artist: media.artist,
               title: media.title,
               duration: media.duration,
               thumbnail: media.thumbnail,
             })
-            .returningAll()
+            .returning(mediaSelection)
             .executeTakeFirstOrThrow();
 
-          allMedias.set(`${media.sourceType}:${media.sourceID}`, newMedia);
+          allMedias.set(`${media.sourceType}:${media.sourceID}`, mediaFromRow(newMedia));
         }
       }
     });
@@ -611,12 +658,11 @@ class PlaylistsRepository {
       }
 
       const result = await tx.selectFrom('playlists')
-        .select(sql`json(items)`.as('items'))
+        .select((eb) => json(eb.ref('items')).as('items'))
         .where('id', '=', playlist.id)
         .executeTakeFirstOrThrow();
 
-      /** @type {PlaylistItemID[]} */
-      const oldItems = result?.items ? JSON.parse(/** @type {string} */ (result.items)) : [];
+      const oldItems = result?.items ? fromJson(result.items) : [];
 
       /** @type {PlaylistItemID | null} */
       let after;
@@ -677,11 +723,11 @@ class PlaylistsRepository {
 
     await db.transaction().execute(async (tx) => {
       const result = await tx.selectFrom('playlists')
-        .select(sql`json(items)`.as('items'))
+        .select((eb) => json(eb.ref('items')).as('items'))
         .where('id', '=', playlist.id)
         .executeTakeFirst();
 
-      const items = result?.items ? JSON.parse(/** @type {string} */ (result.items)) : [];
+      const items = result?.items ? fromJson(result.items) : [];
       const itemIDsInPlaylist = new Set(items);
       const itemIDsToMove = new Set(itemIDs.filter((itemID) => itemIDsInPlaylist.has(itemID)));
 

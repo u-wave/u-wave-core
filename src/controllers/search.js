@@ -1,6 +1,7 @@
 import lodash from 'lodash';
 import { SourceNotFoundError } from '../errors/index.js';
 import toListResponse from '../utils/toListResponse.js';
+import { json, jsonb } from '../utils/sqlite.js';
 
 const { isEqual } = lodash;
 
@@ -47,7 +48,7 @@ function updateSourceData(uw, updates) {
     for (const [id, sourceData] of updates.entries()) {
       await tx.updateTable('media')
         .where('id', '=', id)
-        .set({ sourceData })
+        .set({ sourceData: sourceData == null ? null : jsonb(sourceData) })
         .executeTakeFirst();
     }
   });
@@ -91,7 +92,12 @@ async function search(req) {
   const mediasNeedSourceDataUpdate = new Map();
 
   const mediasInSearchResults = await db.selectFrom('media')
-    .select(['id', 'sourceType', 'sourceID', 'sourceData'])
+    .select([
+      'id',
+      'sourceType',
+      'sourceID',
+      (eb) => json(eb.fn.coalesce(eb.ref('sourceData'), jsonb(null))).as('sourceData'),
+    ])
     .where('sourceType', '=', sourceName)
     .where('sourceID', 'in', Array.from(searchResultsByID.keys()))
     .execute();

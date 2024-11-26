@@ -2,7 +2,7 @@ import RedLock from 'redlock';
 import { EmptyPlaylistError, PlaylistItemNotFoundError } from '../errors/index.js';
 import routes from '../routes/booth.js';
 import { randomUUID } from 'node:crypto';
-import { jsonb } from '../utils/sqlite.js';
+import { fromJson, jsonb, jsonGroupArray } from '../utils/sqlite.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -136,17 +136,17 @@ class Booth {
         (eb) => eb.selectFrom('feedback')
           .where('historyEntryID', '=', eb.ref('historyEntries.id'))
           .where('vote', '=', 1)
-          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .select((eb) => jsonGroupArray(eb.ref('userID')).as('userIDs'))
           .as('upvotes'),
         (eb) => eb.selectFrom('feedback')
           .where('historyEntryID', '=', eb.ref('historyEntries.id'))
           .where('vote', '=', -1)
-          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .select((eb) => jsonGroupArray(eb.ref('userID')).as('userIDs'))
           .as('downvotes'),
         (eb) => eb.selectFrom('feedback')
           .where('historyEntryID', '=', eb.ref('historyEntries.id'))
           .where('favorite', '=', 1)
-          .select((eb) => eb.fn.agg('json_group_array', ['userID']).as('userIDs'))
+          .select((eb) => jsonGroupArray(eb.ref('userID')).as('userIDs'))
           .as('favorites'),
       ])
       .where('historyEntries.id', '=', historyID)
@@ -179,9 +179,9 @@ class Booth {
         end: entry.end,
         createdAt: entry.createdAt,
       },
-      upvotes: /** @type {UserID[]} */ (JSON.parse(entry.upvotes)),
-      downvotes: /** @type {UserID[]} */ (JSON.parse(entry.downvotes)),
-      favorites: /** @type {UserID[]} */ (JSON.parse(entry.favorites)),
+      upvotes: entry.upvotes != null ? fromJson(entry.upvotes) : [],
+      downvotes: entry.downvotes != null ? fromJson(entry.downvotes) : [],
+      favorites: entry.favorites != null ? fromJson(entry.favorites) : [],
     } : null;
   }
 
@@ -236,6 +236,7 @@ class Booth {
         end: playlistItem.end,
         /** @type {null | JsonObject} */
         sourceData: null,
+        createdAt: new Date(),
       },
     };
   }
@@ -435,11 +436,12 @@ class Booth {
         title: next.playlistItem.title,
       }, 'next track');
       const sourceData = await this.#getSourceDataForPlayback(next);
-      if (sourceData) {
-        next.historyEntry.sourceData = sourceData;
-      }
-      const historyEntry = await tx.insertInto('historyEntries')
-        .returningAll()
+
+      // Conservatively, we should take *all* the data from the inserted values.
+      // But then we need to reparse the source data... It's easier to only take
+      // the actually generated value from there :')
+      const { createdAt } = await tx.insertInto('historyEntries')
+        .returning('createdAt')
         .values({
           id: next.historyEntry.id,
           userID: next.user.id,
@@ -452,8 +454,13 @@ class Booth {
         })
         .executeTakeFirstOrThrow();
 
+      if (sourceData != null) {
+        next.historyEntry.sourceData = sourceData;
+      }
+      next.historyEntry.createdAt = createdAt;
+
       result = {
-        historyEntry,
+        historyEntry: next.historyEntry,
         playlist: next.playlist,
         user: next.user,
         media: next.media,
