@@ -139,3 +139,12 @@ uw.listen(port).then(() => {
   console.error(error.stack);
   process.exit(1);
 });
+
+process.once('SIGINT', () => {
+  /** @type {import('../src/Uwave.js').Boot} */ (uw).close((err) => {
+    if (err != null) {
+      console.error(err);
+      process.exitCode = 1;
+    }
+  });
+});

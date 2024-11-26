@@ -10,6 +10,11 @@ const schema = JSON.parse(
   fs.readFileSync(new URL('../schemas/emotes.json', import.meta.url), 'utf8'),
 );
 
+/** @param {unknown} error */
+function isAbortError(error) {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 /**
  * @typedef {{
  *   clientId: string | null,
@@ -58,10 +63,11 @@ class EmoteMap extends Map {
 /**
  * @template {object} T
  * @param {URL|string} url
+ * @param {import('node-fetch').RequestInit} [init]
  * @returns {Promise<T>}
  */
-async function fetchJSON(url) {
-  const res = await nodeFetch(url);
+async function fetchJSON(url, init) {
+  const res = await nodeFetch(url, init);
 
   if (!res.ok) {
     if (res.status === 404) {
@@ -86,21 +92,25 @@ function fromBTTVEmote(bttv) {
   };
 }
 
-async function getBTTVGlobalEmotes() {
+/**
+ * @param {AbortSignal} [signal]
+ */
+async function getBTTVGlobalEmotes(signal) {
   /** @type {BTTVEmote[]} */
-  const emotes = await fetchJSON('https://api.betterttv.net/3/cached/emotes/global');
+  const emotes = await fetchJSON('https://api.betterttv.net/3/cached/emotes/global', { signal });
   return emotes.map(fromBTTVEmote);
 }
 
 /**
  * @param {string} channelId
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getBTTVChannelEmotes(channelId) {
+async function getBTTVChannelEmotes(channelId, signal) {
   let channel = null;
   try {
     channel = /** @type {{ channelEmotes: BTTVEmote[], sharedEmotes: BTTVEmote[] }} */ (
-      await fetchJSON(`https://api.betterttv.net/3/cached/users/twitch/${channelId}`)
+      await fetchJSON(`https://api.betterttv.net/3/cached/users/twitch/${channelId}`, { signal })
     );
   } catch (err) {
     if (!(err instanceof NotFound)) {
@@ -118,12 +128,13 @@ async function getBTTVChannelEmotes(channelId) {
 
 /**
  * @param {string[]} channels
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getBTTVEmotes(channels) {
+async function getBTTVEmotes(channels, signal) {
   const list = await Promise.all([
-    getBTTVGlobalEmotes(),
-    ...channels.map((channelId) => getBTTVChannelEmotes(channelId)),
+    getBTTVGlobalEmotes(signal),
+    ...channels.map((channelId) => getBTTVChannelEmotes(channelId, signal)),
   ]);
 
   return list.flat();
@@ -142,13 +153,14 @@ function fromFFZEmote(emote) {
 
 /**
  * @param {string} channelName
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getFFZChannelEmotes(channelName) {
+async function getFFZChannelEmotes(channelName, signal) {
   let channel = null;
   try {
     channel = /** @type {{ sets: Record<number, FFZEmoteSet> }} */ (
-      await fetchJSON(`https://api.frankerfacez.com/v1/room/${channelName}`)
+      await fetchJSON(`https://api.frankerfacez.com/v1/room/${channelName}`, { signal })
     );
   } catch (err) {
     if (!(err instanceof NotFound)) {
@@ -166,10 +178,13 @@ async function getFFZChannelEmotes(channelName) {
 
 /**
  * @param {string[]} channels
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getFFZEmotes(channels) {
-  const list = await Promise.all(channels.map((channelId) => getFFZChannelEmotes(channelId)));
+async function getFFZEmotes(channels, signal) {
+  const list = await Promise.all(channels.map((channelId) => (
+    getFFZChannelEmotes(channelId, signal)
+  )));
 
   return list.flat();
 }
@@ -188,13 +203,14 @@ function fromSevenTVEmote(emote) {
 
 /**
  * @param {string} channelId
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getSevenTVChannelEmotes(channelId) {
+async function getSevenTVChannelEmotes(channelId, signal) {
   let channel = null;
   try {
     channel = /** @type {{ emote_set?: { emotes: SevenTVEmote[] } }} */ (
-      await fetchJSON(`https://7tv.io/v3/users/twitch/${channelId}`)
+      await fetchJSON(`https://7tv.io/v3/users/twitch/${channelId}`, { signal })
     );
   } catch (err) {
     if (!(err instanceof NotFound)) {
@@ -210,14 +226,15 @@ async function getSevenTVChannelEmotes(channelId) {
 
 /**
  * @param {string[]} channels
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Emote[]>}
  */
-async function getSevenTVEmotes(channels) {
+async function getSevenTVEmotes(channels, signal) {
   /** @type {Promise<{ emotes: SevenTVEmote[] }>} */
-  const global = fetchJSON('https://7tv.io/v3/emote-sets/global');
+  const global = fetchJSON('https://7tv.io/v3/emote-sets/global', { signal });
   const emotes = await Promise.all([
     global.then((data) => data.emotes.map(fromSevenTVEmote)),
-    ...channels.map((channelId) => getSevenTVChannelEmotes(channelId)),
+    ...channels.map((channelId) => getSevenTVChannelEmotes(channelId, signal)),
   ]);
 
   return emotes.flat();
@@ -250,6 +267,8 @@ class Emotes {
 
   #ready = Promise.resolve();
 
+  #shutdownSignal;
+
   /**
    * @param {import('../Uwave.js').Boot} uw
    */
@@ -264,7 +283,14 @@ class Emotes {
         this.#ready = this.#reloadEmotes();
       },
     );
-    uw.onClose(unsubscribe);
+
+    const controller = new AbortController();
+    uw.onClose(() => {
+      unsubscribe();
+      controller.abort();
+    });
+
+    this.#shutdownSignal = controller.signal;
 
     this.#ready = this.#reloadEmotes();
   }
@@ -312,15 +338,15 @@ class Emotes {
     }
 
     if (options.bttv) {
-      promises.push(getBTTVEmotes(channels));
+      promises.push(getBTTVEmotes(channels, this.#shutdownSignal));
     }
 
     if (options.ffz) {
-      promises.push(getFFZEmotes(options.channels));
+      promises.push(getFFZEmotes(options.channels, this.#shutdownSignal));
     }
 
     if (options.seventv) {
-      promises.push(getSevenTVEmotes(channels));
+      promises.push(getSevenTVEmotes(channels, this.#shutdownSignal));
     }
 
     const emotes = new EmoteMap();
@@ -331,7 +357,7 @@ class Emotes {
         for (const emote of result.value) {
           emotes.insert(emote);
         }
-      } else {
+      } else if (!isAbortError(result.reason)) {
         this.#logger.warn(result.reason);
       }
     }
@@ -346,6 +372,11 @@ class Emotes {
 
     if (config.twitch) {
       this.#emotes = await this.#loadTTVEmotes(config.twitch);
+    }
+
+    if (this.#shutdownSignal.aborted) {
+      this.#logger.info('emote reload aborted due to server shutdown');
+      return;
     }
 
     this.#uw.publish('emotes:reload', null);

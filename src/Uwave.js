@@ -178,6 +178,7 @@ class UwaveServer extends EventEmitter {
 
     boot.onClose(() => Promise.all([
       this.redis.quit(),
+      this.db.destroy(),
     ]));
 
     boot.use(migrations);
