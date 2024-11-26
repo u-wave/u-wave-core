@@ -22,7 +22,7 @@ import passport from './plugins/passport.js';
 import migrations from './plugins/migrations.js';
 import { SqliteDateColumnsPlugin, connect as connectSqlite } from './utils/sqlite.js';
 
-const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
+const DEFAULT_SQLITE_PATH = './uwave.sqlite';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 
 class UwCamelCasePlugin extends CamelCasePlugin {
@@ -49,7 +49,6 @@ class UwCamelCasePlugin extends CamelCasePlugin {
  * @typedef {{
  *   port?: number,
  *   sqlite?: string,
- *   mongo?: string,
  *   redis?: string | RedisOptions,
  *   logger?: import('pino').LoggerOptions,
  * } & import('./HttpApi.js').HttpApiOptions} Options
@@ -146,7 +145,7 @@ class UwaveServer extends EventEmitter {
     this.locale = i18n.cloneInstance();
 
     this.options = {
-      mongo: DEFAULT_MONGO_URL,
+      sqlite: DEFAULT_SQLITE_PATH,
       redis: DEFAULT_REDIS_URL,
       ...options,
     };
@@ -154,7 +153,7 @@ class UwaveServer extends EventEmitter {
     /** @type {Kysely<import('./schema.js').Database>} */
     this.db = new Kysely({
       dialect: new SqliteDialect({
-        database: () => connectSqlite(options.sqlite ?? 'uwave_local.sqlite'),
+        database: () => connectSqlite(options.sqlite ?? DEFAULT_SQLITE_PATH),
       }),
       // dialect: new PostgresDialect({
       //   pool: new pg.Pool({

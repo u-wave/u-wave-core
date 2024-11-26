@@ -41,7 +41,7 @@ async function start() {
   const uw = uwave({
     port,
     redis: process.env.REDIS_URL,
-    mongo: process.env.MONGODB_URL ?? 'mongodb://localhost/uwave',
+    sqlite: process.env.SQLITE_PATH ?? 'uwave.sqlite',
     logger: { level: 'trace' },
     secret,
     mailTransport: testTransport,
@@ -52,10 +52,6 @@ async function start() {
 
   uw.use(async (instance) => {
     instance.express.set('json spaces', 2);
-  });
-
-  uw.on('mongoError', (err) => {
-    throw explain(err, 'Could not connect to MongoDB. Is it installed and running?');
   });
 
   uw.on('redisError', (err) => {

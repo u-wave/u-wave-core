@@ -14,7 +14,7 @@ The backend server for üWave, the collaborative listening platform.
 The server on its own only provides an HTTP API, so you must also run the web
 client to actually use it.
 
-üWave requires MongoDB and Redis databases.
+üWave requires a Redis database.
 
 ## Usage
 
@@ -35,10 +35,9 @@ Environment Variables:
  - `SECRET` - A secret key used for encrypting passwords. Must be a 64-character
     hexadecimal string (= 256 bits).
  - `PORT` - Port to listen on. Defaults to 6042.
+ - `SQLITE_PATH` - Path to the database file to use. Defaults to `uwave.sqlite`.
  - `REDIS_URL` - URL of the Redis instance to connect to. Defaults to
    `redis://localhost:6379/`.
- - `MONGODB_URL` - URL of the MongoDB database to use. Defaults to
-   `mongodb://localhost:27017/uwave`.
  - `YOUTUBE_API_KEY` (optional) - Your YouTube Data API key.
 
 ## Development
@@ -58,7 +57,7 @@ of the repository.
 ```bash
 # Database connection URLs.
 REDIS_URL=redis://localhost:6379/
-MONGODB_URL=mongodb://localhost:27017/uwave_dev
+SQLITE_PATH=uwave_dev.sqlite
 
 # Enables the YouTube media source if given.
 YOUTUBE_API_KEY=your key
@@ -80,7 +79,7 @@ Create and start a üWave server.
 
 **Parameters**
 
- - `mongo` - A MongoDB connection URL.
+ - `sqlite` - Path to the SQLite database file.
  - `redis` - A Redis connection URL.
 
 ### uw.source(sourcePlugin, options={})
@@ -103,7 +102,6 @@ Stops the üWave server.
 
 [MIT][]
 
-[Mongoose]: http://mongoosejs.com/
 [IORedis]: https://github.com/luin/ioredis
 [u-wave-source keyword]: https://www.npmjs.com/browse/keyword/u-wave-source
 

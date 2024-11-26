@@ -11,11 +11,11 @@ dotenv.config();
 const port = process.env.PORT ?? 80;
 const secret = Buffer.from(process.env.SECRET, 'hex');
 
-const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/uwave';
+const DEFAULT_SQLITE_PATH = 'uwave.sqlite';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 
 const uw = uwave({
-  mongo: process.env.MONGO_CONNECTION_URL ?? DEFAULT_MONGO_URL,
+  sqlite: process.env.SQLITE_PATH ?? DEFAULT_SQLITE_PATH,
   redis: process.env.REDIS_CONNECTION_URL ?? DEFAULT_REDIS_URL,
   port,
   secret,
