@@ -1,5 +1,6 @@
 import lodash from 'lodash';
 import Page from '../Page.js';
+import { fromJson, json, jsonb } from '../utils/sqlite.js';
 
 const { clamp } = lodash;
 
@@ -14,7 +15,8 @@ const historyEntrySelection = /** @type {const} */ ([
   'historyEntries.title',
   'historyEntries.start',
   'historyEntries.end',
-  'historyEntries.sourceData',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
+  (eb) => json(eb.fn.coalesce(eb.ref('historyEntries.sourceData'), jsonb(null))).as('sourceData'),
   'historyEntries.createdAt as playedAt',
   'users.id as user.id',
   'users.username as user.username',
@@ -27,7 +29,8 @@ const historyEntrySelection = /** @type {const} */ ([
   'media.duration as media.duration',
   'media.sourceType as media.sourceType',
   'media.sourceID as media.sourceID',
-  'media.sourceData as media.sourceData',
+  /** @param {import('kysely').ExpressionBuilder<Database, 'media'>} eb */
+  (eb) => json(eb.fn.coalesce(eb.ref('media.sourceData'), jsonb(null))).as('media.sourceData'),
   /** @param {import('kysely').ExpressionBuilder<Database, 'historyEntries'>} eb */
   (eb) => eb.selectFrom('feedback')
     .where('historyEntryID', '=', eb.ref('historyEntries.id'))
@@ -55,7 +58,7 @@ const historyEntrySelection = /** @type {const} */ ([
  *   title: string,
  *   start: number,
  *   end: number,
- *   sourceData: import('type-fest').JsonObject | null,
+ *   sourceData: import('../utils/sqlite.js').SerializedJSON<import('type-fest').JsonObject | null>,
  *   playedAt: Date,
  *   'user.id': UserID,
  *   'user.username': string,
@@ -64,14 +67,15 @@ const historyEntrySelection = /** @type {const} */ ([
  *   'media.id': MediaID,
  *   'media.sourceType': string,
  *   'media.sourceID': string,
- *   'media.sourceData': import('type-fest').JsonObject | null,
+ *   'media.sourceData': import('../utils/sqlite.js').SerializedJSON<
+ *       import('type-fest').JsonObject | null>,
  *   'media.artist': string,
  *   'media.title': string,
  *   'media.thumbnail': string,
  *   'media.duration': number,
- *   upvotes: string,
- *   downvotes: string,
- *   favorites: string,
+ *   upvotes: import('../utils/sqlite.js').SerializedJSON<UserID>,
+ *   downvotes: import('../utils/sqlite.js').SerializedJSON<UserID>,
+ *   favorites: import('../utils/sqlite.js').SerializedJSON<UserID>,
  * }} row
  */
 function historyEntryFromRow(row) {
@@ -101,12 +105,9 @@ function historyEntryFromRow(row) {
         duration: row['media.duration'],
       },
     },
-    /** @type {UserID[]} */
-    upvotes: JSON.parse(row.upvotes),
-    /** @type {UserID[]} */
-    downvotes: JSON.parse(row.downvotes),
-    /** @type {UserID[]} */
-    favorites: JSON.parse(row.favorites),
+    upvotes: fromJson(row.upvotes),
+    downvotes: fromJson(row.downvotes),
+    favorites: fromJson(row.favorites),
   };
 }
 

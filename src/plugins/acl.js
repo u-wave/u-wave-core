@@ -1,7 +1,12 @@
-import { sql } from 'kysely';
 import defaultRoles from '../config/defaultRoles.js';
 import routes from '../routes/acl.js';
-import { isForeignKeyError, jsonb, jsonEach } from '../utils/sqlite.js';
+import {
+  isForeignKeyError,
+  fromJson,
+  json,
+  jsonb,
+  jsonEach,
+} from '../utils/sqlite.js';
 import { RoleNotFoundError } from '../errors/index.js';
 
 /**
@@ -75,14 +80,13 @@ class Acl {
    * @returns {Promise<Record<string, Permission[]>>}
    */
   async getAllRoles(tx = this.#uw.db) {
-    // TODO: `json()` should be strongly typed
     const list = await tx.selectFrom('roles')
-      .select(['id', sql`json(permissions)`.as('permissions')])
+      .select(['id', (eb) => json(eb.ref('permissions')).as('permissions')])
       .execute();
 
     const roles = Object.fromEntries(list.map((role) => [
       role.id,
-      /** @type {Permission[]} */ (JSON.parse(/** @type {string} */ (role.permissions))),
+      fromJson(role.permissions),
     ]));
 
     return roles;

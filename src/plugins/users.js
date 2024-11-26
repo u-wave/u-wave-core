@@ -7,7 +7,7 @@ import Page from '../Page.js';
 import {
   IncorrectPasswordError, UsedEmailError, UsedUsernameError, UserNotFoundError,
 } from '../errors/index.js';
-import { jsonGroupArray } from '../utils/sqlite.js';
+import { fromJson, jsonGroupArray } from '../utils/sqlite.js';
 
 const { pick, omit } = lodash;
 
@@ -156,14 +156,10 @@ class UsersRepository {
       ])
       .execute();
 
-    for (const user of users) {
-      const roles = /** @type {string[]} */ (JSON.parse(
-        /** @type {string} */ (/** @type {unknown} */ (user.roles)),
-      ));
-      Object.assign(user, { roles });
-    }
-
-    return /** @type {import('type-fest').SetNonNullable<(typeof users)[0], 'roles'>[]} */ (users);
+    return users.map((user) => ({
+      ...user,
+      roles: user.roles != null ? fromJson(user.roles) : [],
+    }));
   }
 
   /**

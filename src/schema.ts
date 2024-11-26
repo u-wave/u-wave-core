@@ -1,5 +1,6 @@
 import type { Kysely as KyselyBase, Generated } from 'kysely';
-import type { JsonObject, Tagged } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
+import type { JsonObject, JsonValue, Tagged } from 'type-fest'; // eslint-disable-line n/no-missing-import, n/no-unpublished-import
+import type { JSONB } from './utils/sqlite';
 
 export type UserID = Tagged<string, 'UserID'>;
 export type MediaID = Tagged<string, 'MediaID'>;
@@ -8,8 +9,18 @@ export type PlaylistItemID = Tagged<string, 'PlaylistItemID'>;
 export type HistoryEntryID = Tagged<string, 'HistoryEntryID'>;
 export type Permission = Tagged<string, 'Permission'>;
 
+/**
+ * The JS type for a given table's rows.
+ * This combines two transformations:
+ * - Generated columns are resolved to their inner type. This is a type-level operation.
+ * - JSON columns are resolved to their JS type. This requires conversion code when querying the
+ *   data.
+ */
 type Selected<T> = {
-  [K in keyof T]: T[K] extends Generated<infer Inner> ? Inner : T[K];
+  [K in keyof T]: T[K] extends Generated<infer Inner> ? Inner
+    : T[K] extends JSONB<JsonValue> ? T[K]['__inner']
+    : T[K] extends JSONB<JsonValue> | null ? (T[K] & {})['__inner'] | null
+    : T[K];
 } & {};
 
 export type Media = Selected<MediaTable>;
@@ -17,7 +28,7 @@ export interface MediaTable {
   id: Generated<MediaID>,
   sourceID: string,
   sourceType: string,
-  sourceData: JsonObject | null,
+  sourceData: JSONB<JsonObject> | null,
   artist: string,
   title: string,
   duration: number,
@@ -47,7 +58,7 @@ export interface UserRoleTable {
 
 export interface RoleTable {
   id: string,
-  permissions: Permission[],
+  permissions: JSONB<Permission[]>,
 }
 
 export type Ban = Selected<BanTable>;
@@ -85,7 +96,7 @@ export interface PlaylistTable {
   id: Generated<PlaylistID>,
   userID: UserID,
   name: string,
-  items: PlaylistItemID[],
+  items: JSONB<PlaylistItemID[]>,
   createdAt: Generated<Date>,
   updatedAt: Generated<Date>,
 }
@@ -117,7 +128,7 @@ export interface HistoryEntryTable {
   /** Time to stop playback at. */
   end: number,
   /** Arbitrary source-specific data required for media playback. */
-  sourceData: JsonObject | null,
+  sourceData: JSONB<JsonObject> | null,
   createdAt: Generated<Date>,
 }
 
@@ -131,7 +142,7 @@ export interface FeedbackTable {
 
 export interface ConfigurationTable {
   name: string,
-  value: JsonObject | null,
+  value: JSONB<JsonObject>,
 }
 
 export interface MigrationTable {

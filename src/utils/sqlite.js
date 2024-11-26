@@ -2,8 +2,40 @@ import lodash from 'lodash';
 import { sql, OperationNodeTransformer } from 'kysely';
 
 /**
+ * Typed representation of encoded JSONB. You are not meant to actually instantiate
+ * a value of this type :)
+ *
+ * @template {import('type-fest').JsonValue} T
+ * @typedef {import('type-fest').Tagged<Uint8Array, 'SqliteJsonb'> & { __inner: T }} JSONB
+ */
+
+/**
+ * Typed representation of an encoded JSON string.
+ * @template {import('type-fest').JsonValue} T
+ * @typedef {import('type-fest').Tagged<string, 'SqliteJson'> & { __inner: T }} SerializedJSON
+ */
+
+/**
+ * Any SQLite JSON value.
+ *
+ * @template {import('type-fest').JsonValue} T
+ * @typedef {JSONB<T> | SerializedJSON<T>} SqliteJSON
+ */
+
+/**
+ * @template {import('type-fest').JsonValue} T
+ * @param {SerializedJSON<T>} value
+ * @returns {T}
+ */
+export function fromJson(value) {
+  return JSON.parse(value);
+}
+
+/**
+ * Note the `value` and `atom` types might be wrong for non-SQL JSON types
+ *
  * @template {unknown[]} T
- * @param {import('kysely').Expression<T>} expr
+ * @param {import('kysely').Expression<SqliteJSON<T>>} expr
  * @returns {import('kysely').RawBuilder<{
  *   key: unknown,
  *   value: T[0],
@@ -21,7 +53,7 @@ export function jsonEach(expr) {
 
 /**
  * @template {unknown[]} T
- * @param {import('kysely').Expression<T>} expr
+ * @param {import('kysely').Expression<SqliteJSON<T>>} expr
  * @returns {import('kysely').RawBuilder<number>}
  */
 export function jsonLength(expr) {
@@ -29,17 +61,22 @@ export function jsonLength(expr) {
 }
 
 /**
- * @param {import('type-fest').Jsonifiable} value
- * @returns {import('kysely').RawBuilder<any>}
+ * Turn a JS value into JSONB.
+ *
+ * @template {import('type-fest').JsonValue} T
+ * @param {T} value
+ * @returns {import('kysely').RawBuilder<JSONB<T>>}
  */
 export function jsonb(value) {
   return sql`jsonb(${JSON.stringify(value)})`;
 }
 
 /**
- * @template {unknown[]} T
- * @param {import('kysely').Expression<T>} expr
- * @returns {import('kysely').RawBuilder<T>}
+ * Turn a SQLite expression into a JSON string.
+ *
+ * @template {unknown} T
+ * @param {import('kysely').Expression<SqliteJSON<T>>} expr
+ * @returns {import('kysely').RawBuilder<SerializedJSON<T>>}
  */
 export function json(expr) {
   return sql`json(${expr})`;
@@ -47,17 +84,20 @@ export function json(expr) {
 
 /**
  * @template {unknown[]} T
- * @param {import('kysely').Expression<T>} expr
- * @returns {import('kysely').RawBuilder<T>}
+ * @param {import('kysely').Expression<SqliteJSON<T>>} expr
+ * @returns {import('kysely').RawBuilder<JSONB<T>>}
  */
 export function arrayShuffle(expr) {
   return sql`jsonb(json_array_shuffle(${json(expr)}))`;
 }
 
 /**
+ * Move the first item in an array to the end.
+ * This only works on JSONB inputs.
+ *
  * @template {unknown[]} T
- * @param {import('kysely').Expression<T>} expr
- * @returns {import('kysely').RawBuilder<T>}
+ * @param {import('kysely').Expression<JSONB<T>>} expr
+ * @returns {import('kysely').RawBuilder<JSONB<T>>}
  */
 export function arrayCycle(expr) {
   return sql`
@@ -75,7 +115,7 @@ export function arrayCycle(expr) {
 /**
  * @template {unknown} T
  * @param {import('kysely').Expression<T>} expr
- * @returns {import('kysely').RawBuilder<T[]>}
+ * @returns {import('kysely').RawBuilder<SerializedJSON<T[]>>}
  */
 export function jsonGroupArray(expr) {
   return sql`json_group_array(${expr})`;

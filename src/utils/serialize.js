@@ -40,7 +40,7 @@ export function serializeMedia(model) {
 /**
  * @param {{
  *   id: import('../schema.js').PlaylistItemID,
- *   media: import('../schema.js').Media,
+ *   media: Parameters<typeof serializeMedia>[0],
  *   artist: string,
  *   title: string,
  *   start: number,
