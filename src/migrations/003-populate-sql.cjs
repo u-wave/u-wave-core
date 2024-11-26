@@ -427,7 +427,13 @@ async function up({ context: uw }) {
   const motd = await uw.redis.get('motd');
 
   /** @type {Map<string, string>} */
-  const idMap = new Map();
+  const mediaIDs = new Map();
+  /** @type {Map<string, string>} */
+  const userIDs = new Map();
+  /** @type {Map<string, string>} */
+  const playlistIDs = new Map();
+  /** @type {Map<string, string>} */
+  const playlistItemIDs = new Map();
 
   await db.transaction().execute(async (tx) => {
     for await (const config of models.Config.find().lean()) {
@@ -444,26 +450,26 @@ async function up({ context: uw }) {
     }
 
     for await (const media of models.Media.find().lean()) {
-      const id = randomUUID();
-      await tx.insertInto('media')
+      const { id } = await tx.insertInto('media')
         .values({
-          id,
+          id: randomUUID(),
           sourceType: media.sourceType,
           sourceID: media.sourceID,
           sourceData: jsonb(media.sourceData),
           artist: media.artist,
-          title: media.title,
+          title: media.title ?? '',
           duration: media.duration,
           thumbnail: media.thumbnail,
-          createdAt: media.createdAt.toISOString(),
-          updatedAt: media.updatedAt.toISOString(),
+          createdAt: (media.createdAt ?? media.updatedAt ?? new Date()).toISOString(),
+          updatedAt: (media.updatedAt ?? new Date()).toISOString(),
         })
         .onConflict((conflict) => conflict.columns(['sourceType', 'sourceID']).doUpdateSet({
           updatedAt: (eb) => eb.ref('excluded.updatedAt'),
         }))
-        .execute();
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
-      idMap.set(media._id.toString(), id);
+      mediaIDs.set(media._id.toString(), id);
     }
 
     const roles = await models.AclRole.find().lean();
@@ -491,7 +497,7 @@ async function up({ context: uw }) {
 
     for await (const user of models.User.find().lean()) {
       const userID = randomUUID();
-      idMap.set(user._id.toString(), userID);
+      userIDs.set(user._id.toString(), userID);
 
       await tx.insertInto('users')
         .values({
@@ -499,7 +505,7 @@ async function up({ context: uw }) {
           username: user.username,
           slug: user.slug,
           createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt.toISOString(),
+          updatedAt: (user.updatedAt ?? user.createdAt).toISOString(),
         })
         .execute();
 
@@ -511,35 +517,38 @@ async function up({ context: uw }) {
 
       for await (const playlist of models.Playlist.where('author', user._id).lean()) {
         const playlistID = randomUUID();
-        idMap.set(playlist._id.toString(), playlistID);
+        playlistIDs.set(playlist._id.toString(), playlistID);
 
         await tx.insertInto('playlists')
           .values({
             id: playlistID,
             name: playlist.name,
             userID,
-            createdAt: playlist.createdAt.toISOString(),
-            updatedAt: playlist.updatedAt.toISOString(),
+            // Old objects use the `.created` property
+            createdAt: (playlist.createdAt ?? playlist.created).toISOString(),
+            updatedAt: (playlist.updatedAt ?? playlist.created).toISOString(),
           })
           .execute();
 
         const items = [];
         for (const itemMongoID of playlist.media) {
           const itemID = randomUUID();
-          idMap.set(itemMongoID.toString(), itemID);
+          playlistItemIDs.set(itemMongoID.toString(), itemID);
 
           const item = await models.PlaylistItem.findById(itemMongoID).lean();
+          const mediaID = mediaIDs.get(item.media.toString());
+
           await tx.insertInto('playlistItems')
             .values({
               id: itemID,
               playlistID,
-              mediaID: idMap.get(item.media.toString()),
+              mediaID,
               artist: item.artist,
               title: item.title,
               start: item.start,
-              end: item.end,
-              createdAt: item.createdAt.toISOString(),
-              updatedAt: item.updatedAt.toISOString(),
+              end: item.end ?? 0, // Not ideal, but what can we do
+              createdAt: (item.createdAt ?? item.updatedAt ?? new Date()).toISOString(),
+              updatedAt: (item.updatedAt ?? new Date()).toISOString(),
             })
             .execute();
 
@@ -554,7 +563,7 @@ async function up({ context: uw }) {
     }
 
     for await (const entry of models.Authentication.find().lean()) {
-      const userID = idMap.get(entry.user.toString());
+      const userID = userIDs.get(entry.user.toString());
       if (userID == null) {
         throw new Error('Migration failure: unknown user ID');
       }
@@ -576,9 +585,8 @@ async function up({ context: uw }) {
 
     for await (const entry of models.HistoryEntry.find().lean()) {
       const entryID = randomUUID();
-      idMap.set(entry._id.toString(), entryID);
-      const userID = idMap.get(entry.user.toString());
-      const mediaID = idMap.get(entry.media.media.toString());
+      const userID = userIDs.get(entry.user.toString());
+      const mediaID = mediaIDs.get(entry.media.media.toString());
       await tx.insertInto('historyEntries')
         .values({
           id: entryID,
@@ -597,14 +605,14 @@ async function up({ context: uw }) {
       for (const id of entry.upvotes) {
         feedback.set(id.toString(), {
           historyEntryID: entryID,
-          userID: idMap.get(id.toString()),
+          userID: userIDs.get(id.toString()),
           vote: 1,
         });
       }
       for (const id of entry.downvotes) {
         feedback.set(id.toString(), {
           historyEntryID: entryID,
-          userID: idMap.get(id.toString()),
+          userID: userIDs.get(id.toString()),
           vote: -1,
         });
       }
@@ -615,7 +623,7 @@ async function up({ context: uw }) {
         } else {
           feedback.set(id.toString(), {
             historyEntryID: entryID,
-            userID: idMap.get(id.toString()),
+            userID: userIDs.get(id.toString()),
             favorite: 1,
           });
         }
