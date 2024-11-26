@@ -6,6 +6,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
+import session from 'express-session';
 import qs from 'qs';
 import { pinoHttp } from 'pino-http';
 
@@ -109,6 +110,11 @@ async function httpApi(uw, options) {
     }))
     .use(bodyParser.json())
     .use(cookieParser())
+    .use(session({
+      secret: options.secret,
+      resave: false,
+      saveUninitialized: false,
+    }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
     .use(attachUwaveMeta(uw.httpApi, uw))
