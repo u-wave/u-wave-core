@@ -44,7 +44,7 @@
     "helmet": "^8.0.0",
     "htmlescape": "^1.1.1",
     "http-errors": "^2.0.0",
-    "i18next": "^23.2.6",
+    "i18next": "^24.0.2",
     "ioredis": "^5.0.1",
     "json-merge-patch": "^1.0.2",
     "jsonwebtoken": "^9.0.0",
