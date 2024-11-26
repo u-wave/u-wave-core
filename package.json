@@ -85,7 +85,7 @@
     "@types/cookie-parser": "^1.4.2",
     "@types/cors": "^2.8.10",
     "@types/express": "^5.0.0",
-    "@types/express-session": "^1.18.0",
+    "@types/express-session": "^1.18.1",
     "@types/has": "^1.0.0",
     "@types/htmlescape": "^1.1.1",
     "@types/http-errors": "^2.0.0",
