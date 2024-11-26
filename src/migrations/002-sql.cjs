@@ -114,6 +114,10 @@ async function up({ context: uw }) {
     .addColumn('source_data', 'jsonb')
     .addColumn('created_at', 'timestamp', (col) => col.notNull().defaultTo(now))
     .execute();
+  await db.schema.createIndex('history_entries_created_at')
+    .on('history_entries')
+    .column('created_at')
+    .execute();
 
   await db.schema.createTable('feedback')
     .addColumn('history_entry_id', 'uuid', (col) => col.notNull().references('historyEntries.id'))
