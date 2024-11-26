@@ -11,7 +11,7 @@ const schema = JSON.parse(
 );
 
 /** @param {unknown} error */
-function isAbortError (error) {
+function isAbortError(error) {
   return error instanceof Error && error.name === 'AbortError';
 }
 
@@ -182,7 +182,9 @@ async function getFFZChannelEmotes(channelName, signal) {
  * @returns {Promise<Emote[]>}
  */
 async function getFFZEmotes(channels, signal) {
-  const list = await Promise.all(channels.map((channelId) => getFFZChannelEmotes(channelId, signal)));
+  const list = await Promise.all(channels.map((channelId) => (
+    getFFZChannelEmotes(channelId, signal)
+  )));
 
   return list.flat();
 }
