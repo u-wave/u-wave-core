@@ -71,7 +71,7 @@ async function createUwave(name, options) {
     sqlite: ':memory:',
     secret: Buffer.from(`secret_${name}`),
     logger: {
-      level: 'silent',
+      level: 'error',
     },
   });
 
