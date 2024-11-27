@@ -560,6 +560,16 @@ async function up({ context: uw }) {
           .set({ items: jsonb(items) })
           .execute();
       }
+
+      if (user.activePlaylist != null) {
+        const activePlaylistID = playlistIDs.get(user.activePlaylist.toString());
+        if (activePlaylistID != null) {
+          await tx.updateTable('users')
+            .where('id', '=', userID)
+            .set({ activePlaylistID })
+            .execute();
+        }
+      }
     }
 
     for await (const entry of models.Authentication.find().lean()) {
