@@ -396,6 +396,42 @@ const userSchema = new mongoose.Schema({
   minimize: false,
 });
 
+async function* asyncChunks(iter, chunkSize) {
+  let chunk = [];
+  for await (const element of iter) {
+    chunk.push(element);
+    if (chunk.length >= chunkSize) {
+      yield chunk;
+      chunk = [];
+    }
+  }
+  if (chunk.length > 0) {
+    yield chunk;
+  }
+}
+
+function zip(a, b) {
+  const iterA = a[Symbol.iterator]();
+  const iterB = b[Symbol.iterator]();
+  const iter = {
+    next() {
+      const itemA = iterA.next();
+      const itemB = iterB.next();
+
+      if (itemA.done !== itemB.done) {
+        throw new Error('zip: iterators have different lengths')
+      }
+
+      return {
+        value: [itemA.value, itemB.value],
+        done: itemA.done,
+      };
+    },
+  };
+  iter[Symbol.iterator] = () => iter;
+  return iter;
+}
+
 /**
  * @param {import('umzug').MigrationParams<import('../Uwave').default>} params
  */
@@ -449,9 +485,9 @@ async function up({ context: uw }) {
         .execute();
     }
 
-    for await (const media of models.Media.find().lean()) {
-      const { id } = await tx.insertInto('media')
-        .values({
+    for await (const medias of asyncChunks(models.Media.find().lean(), 50)) {
+      const rows = await tx.insertInto('media')
+        .values(medias.map((media) => ({
           id: randomUUID(),
           sourceType: media.sourceType,
           sourceID: media.sourceID,
@@ -462,14 +498,16 @@ async function up({ context: uw }) {
           thumbnail: media.thumbnail,
           createdAt: (media.createdAt ?? media.updatedAt ?? new Date()).toISOString(),
           updatedAt: (media.updatedAt ?? new Date()).toISOString(),
-        })
+        })))
         .onConflict((conflict) => conflict.columns(['sourceType', 'sourceID']).doUpdateSet({
           updatedAt: (eb) => eb.ref('excluded.updatedAt'),
         }))
         .returning('id')
-        .executeTakeFirstOrThrow();
+        .execute();
 
-      mediaIDs.set(media._id.toString(), id);
+      for (const [media, row] of zip(medias, rows)) {
+        mediaIDs.set(media._id.toString(), row.id);
+      }
     }
 
     const roles = await models.AclRole.find().lean();
