@@ -419,7 +419,7 @@ function zip(a, b) {
       const itemB = iterB.next();
 
       if (itemA.done !== itemB.done) {
-        throw new Error('zip: iterators have different lengths')
+        throw new Error('zip: iterators have different lengths');
       }
 
       return {
