@@ -20,6 +20,7 @@ describe('Media Sources', () => {
       artist: `artist ${sourceID}`,
       title: `title ${sourceID}`,
       thumbnail: 'https://placedog.net/280',
+      duration: 60,
     };
   }
 
@@ -34,7 +35,7 @@ describe('Media Sources', () => {
   };
 
   function testSource() {
-    const search = async (query) => [{ sourceID: query }];
+    const search = async (query) => [makeTestMedia(query)];
     const get = async (ids) => ids.map((sourceID) => makeTestMedia(sourceID));
     return {
       name: 'test-source',
@@ -48,7 +49,7 @@ describe('Media Sources', () => {
     name: 'test-source-with-play',
     async search() { throw new Error('unimplemented'); },
     async get() { throw new Error('unimplemented'); },
-    async play(context, media) {
+    async play(_context, media) {
       return {
         urn: `${media.sourceType}:${media.sourceID}`,
       };
@@ -70,8 +71,8 @@ describe('Media Sources', () => {
     uw.source(testSource);
     const query = 'search-query';
     const results = await uw.source('test-source').search(null, query);
-    assert.deepStrictEqual(results, [
-      { sourceType: 'test-source', sourceID: query },
+    sinon.assert.match(results, [
+      sinon.match({ sourceType: 'test-source', sourceID: query }),
     ]);
   });
 
@@ -80,10 +81,20 @@ describe('Media Sources', () => {
     const results = await uw.source('test-source').get(null, ['one', 'two']);
     assert.deepStrictEqual(results, [
       {
-        sourceType: 'test-source', sourceID: 'one', artist: 'artist one', title: 'title one', thumbnail: 'https://placedog.net/280',
+        sourceType: 'test-source',
+        sourceID: 'one',
+        artist: 'artist one',
+        title: 'title one',
+        thumbnail: 'https://placedog.net/280',
+        duration: 60,
       },
       {
-        sourceType: 'test-source', sourceID: 'two', artist: 'artist two', title: 'title two', thumbnail: 'https://placedog.net/280',
+        sourceType: 'test-source',
+        sourceID: 'two',
+        artist: 'artist two',
+        title: 'title two',
+        thumbnail: 'https://placedog.net/280',
+        duration: 60,
       },
     ]);
   });
@@ -146,7 +157,7 @@ describe('Media Sources', () => {
         .expect(200);
       sinon.assert.match(results.body, {
         data: [
-          { sourceType: 'test-source', sourceID: query },
+          sinon.match({ sourceType: 'test-source', sourceID: query }),
         ],
       });
     });
@@ -191,6 +202,58 @@ describe('Media Sources', () => {
         status: 400,
         code: 'validation-error',
       });
+    });
+
+    it('should include the playlists a media is already in', async () => {
+      uw.source(testSource);
+
+      const user = await uw.test.createUser();
+      const otherUser = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      const { playlist: playlistA } = await uw.playlists.createPlaylist(user, { name: 'Playlist A' });
+      const { playlist: playlistB } = await uw.playlists.createPlaylist(user, { name: 'Playlist B' });
+      const { playlist: playlistC } = await uw.playlists.createPlaylist(otherUser, {
+        name: "Other user's playlist should not be included",
+      });
+
+      const [onlyA, onlyB, both] = await uw.source('test-source').get(user, ['ONLY_A', 'ONLY_B', 'BOTH']);
+      await uw.playlists.addPlaylistItems(playlistA, [onlyA, both]);
+      await uw.playlists.addPlaylistItems(playlistB, [onlyB, both]);
+      // All media are in playlist C, but that playlist is owned by a different user,
+      // so we do not expect it to show up in the assertions below.
+      await uw.playlists.addPlaylistItems(playlistC, [onlyA, onlyB, both]);
+
+      const resNone = await supertest(uw.server)
+        .get('/api/search/test-source?include=playlists')
+        .query({ query: 'NONE' })
+        .set('Cookie', `uwsession=${token}`)
+        .send()
+        .expect(200);
+      sinon.assert.match(resNone.body.data, [
+        makeTestMedia('NONE'),
+      ]);
+
+      const resOnlyA = await supertest(uw.server)
+        .get('/api/search/test-source?include=playlists')
+        .query({ query: 'ONLY_A' })
+        .set('Cookie', `uwsession=${token}`)
+        .send()
+        .expect(200);
+      sinon.assert.match(resOnlyA.body.data, [{
+        ...makeTestMedia('ONLY_A'),
+        inPlaylists: [playlistA.id],
+      }]);
+      const resBoth = await supertest(uw.server)
+        .get('/api/search/test-source?include=playlists')
+        .query({ query: 'BOTH' })
+        .set('Cookie', `uwsession=${token}`)
+        .send()
+        .expect(200);
+      sinon.assert.match(resBoth.body.data, [{
+        ...makeTestMedia('BOTH'),
+        inPlaylists: [playlistA.id, playlistB.id],
+      }]);
     });
   });
 });

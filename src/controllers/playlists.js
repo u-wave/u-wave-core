@@ -64,6 +64,10 @@ async function getPlaylists(req) {
     playlists = await uw.playlists.getUserPlaylists(user);
   }
 
+  playlists.sort((a, b) => {
+    return a.name.localeCompare(b.name);
+  });
+
   return toListResponse(
     playlists.map(serializePlaylist),
     { url: req.fullUrl },
