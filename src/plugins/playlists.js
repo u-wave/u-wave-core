@@ -503,7 +503,7 @@ class PlaylistsRepository {
 
   /**
    * Get playlists that contain any of the given medias. If multiple medias are in a single
-   * playlist, that playlist will be returned multiple times, keyed on the media's unique ObjectId.
+   * playlist, that playlist will be returned multiple times, keyed on the media ID.
    *
    * @param {MediaID[]} mediaIDs
    * @param {{ author?: UserID }} options

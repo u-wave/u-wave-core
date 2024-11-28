@@ -77,6 +77,46 @@ describe('Playlists', () => {
         sinon.match({ name: 'Playlist B' }),
       ]);
     });
+
+    it('shows all playlists containing a specific media', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+
+      const { playlist: playlistA } = await uw.playlists.createPlaylist(user, { name: 'Playlist A' });
+      const { playlist: playlistB } = await uw.playlists.createPlaylist(user, { name: 'Playlist B' });
+
+      const [onlyA, onlyB, both] = await uw.source('test-source').get(user, ['ONLY_A', 'ONLY_B', 'BOTH']);
+      const a = await uw.playlists.addPlaylistItems(playlistA, [onlyA, both]);
+      const b = await uw.playlists.addPlaylistItems(playlistB, [onlyB, both]);
+
+      const mediaIDOnlyA = a.added[0].media.id;
+      const mediaIDOnlyB = b.added[0].media.id;
+      const mediaIDBoth = a.added[1].media.id;
+
+      const resOnlyA = await supertest(uw.server)
+        .get(`/api/playlists?contains=${mediaIDOnlyA}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(resOnlyA.body.data, [
+        sinon.match({ name: 'Playlist A' }),
+      ]);
+
+      const resOnlyB = await supertest(uw.server)
+        .get(`/api/playlists?contains=${mediaIDOnlyB}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(resOnlyB.body.data, [
+        sinon.match({ name: 'Playlist B' }),
+      ]);
+
+      const resBoth = await supertest(uw.server)
+        .get(`/api/playlists?contains=${mediaIDBoth}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+      sinon.assert.match(resBoth.body.data, [
+        sinon.match({ name: 'Playlist A' }),
+        sinon.match({ name: 'Playlist B' }),
+      ]);
+    });
   });
 
   describe('POST /playlists', () => {
