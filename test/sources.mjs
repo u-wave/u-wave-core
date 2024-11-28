@@ -252,7 +252,7 @@ describe('Media Sources', () => {
         .expect(200);
       sinon.assert.match(resBoth.body.data, [{
         ...makeTestMedia('BOTH'),
-        inPlaylists: [playlistA.id, playlistB.id]
+        inPlaylists: [playlistA.id, playlistB.id],
       }]);
     });
   });
