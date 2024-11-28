@@ -80,13 +80,20 @@ describe('Playlists', () => {
 
     it('shows all playlists containing a specific media', async () => {
       const token = await uw.test.createTestSessionToken(user);
+      const otherUser = await uw.test.createUser();
 
       const { playlist: playlistA } = await uw.playlists.createPlaylist(user, { name: 'Playlist A' });
       const { playlist: playlistB } = await uw.playlists.createPlaylist(user, { name: 'Playlist B' });
+      const { playlist: playlistC } = await uw.playlists.createPlaylist(otherUser, {
+        name: "Other user's playlist should not be included",
+      });
 
       const [onlyA, onlyB, both] = await uw.source('test-source').get(user, ['ONLY_A', 'ONLY_B', 'BOTH']);
       const a = await uw.playlists.addPlaylistItems(playlistA, [onlyA, both]);
       const b = await uw.playlists.addPlaylistItems(playlistB, [onlyB, both]);
+      // All media are in playlist C, but that playlist is owned by a different user,
+      // so we do not expect it to show up in the assertions below.
+      await uw.playlists.addPlaylistItems(playlistC, [onlyA, onlyB, both]);
 
       const mediaIDOnlyA = a.added[0].media.id;
       const mediaIDOnlyB = b.added[0].media.id;
