@@ -37,6 +37,10 @@ const envSchema = {
       type: 'number',
       default: 6042,
     },
+    MONGODB_URL: {
+      type: 'string',
+      format: 'uri',
+    },
     REDIS_URL: {
       type: 'string',
       format: 'uri',
@@ -108,6 +112,8 @@ const uw = uwave({
   redis: config.REDIS_URL,
   sqlite: config.SQLITE_PATH,
   secret,
+  // This property is untyped, it is propagated to the also-untyped MongoDB -> SQL migration
+  mongo: config.MONGODB_URL,
 });
 
 uw.on('redisError', (err) => {
