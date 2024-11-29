@@ -172,9 +172,7 @@ class Waitlist {
   }
 
   /**
-   * used both for joining the waitlist, and for
-   * adding someone else to the waitlist.
-   * TODO maybe split this up and let http-api handle the difference
+   * Add a user to the waitlist.
    *
    * @param {UserID} userID
    * @param {{moderator?: User}} [options]
