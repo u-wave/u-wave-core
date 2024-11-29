@@ -353,4 +353,59 @@ describe('Waitlist', () => {
         .expect(200);
     });
   });
+
+  describe('DELETE /waitlist/:id', () => {
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .delete(`/api/waitlist/${user.id}`)
+        .expect(401);
+    });
+
+    it('returns a useful error when user is not in waitlist', async () => {
+      const token = await uw.test.createTestSessionToken(user);
+      await uw.acl.allow(user, ['user']);
+
+      const res = await supertest(uw.server)
+        .delete(`/api/waitlist/${user.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'not-in-waitlist')),
+      });
+    });
+
+    it('can remove self', async () => {
+      // This is a bit janky, but we need a user to take up the DJ spot,
+      // so the user we remove is still in the waitlist.
+      const dj = await uw.test.createUser();
+      await uw.test.connectToWebSocketAs(user);
+      await uw.test.connectToWebSocketAs(dj);
+
+      await uw.acl.allow(dj, ['user']);
+      await uw.acl.allow(user, ['user']);
+
+      await createTestPlaylistItem(dj);
+      await createTestPlaylistItem(user);
+
+      await uw.waitlist.addUser(dj.id);
+      await uw.waitlist.addUser(user.id);
+
+      const prevWaitlist = await supertest(uw.server)
+        .get('/api/waitlist')
+        .expect(200);
+      sinon.assert.match(prevWaitlist.body.data, [user.id]);
+
+      const token = await uw.test.createTestSessionToken(user);
+
+      await supertest(uw.server)
+        .delete(`/api/waitlist/${user.id}`)
+        .set('Cookie', `uwsession=${token}`)
+        .expect(200);
+
+      const nextWaitlist = await supertest(uw.server)
+        .get('/api/waitlist')
+        .expect(200);
+      sinon.assert.match(nextWaitlist.body.data, []);
+    });
+  });
 });

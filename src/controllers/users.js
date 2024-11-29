@@ -2,9 +2,9 @@ import {
   HTTPError,
   PermissionError,
   UserNotFoundError,
+  UserNotInWaitlistError,
 } from '../errors/index.js';
 import skipIfCurrentDJ from '../utils/skipIfCurrentDJ.js';
-import removeFromWaitlist from '../utils/removeFromWaitlist.js';
 import getOffsetPagination from '../utils/getOffsetPagination.js';
 import toItemResponse from '../utils/toItemResponse.js';
 import toListResponse from '../utils/toListResponse.js';
@@ -183,6 +183,8 @@ async function changeAvatar() {
 }
 
 /**
+ * Remove the user ID from the online users list.
+ *
  * @param {import('../Uwave.js').default} uw
  * @param {UserID} userID
  */
@@ -190,9 +192,12 @@ async function disconnectUser(uw, userID) {
   await skipIfCurrentDJ(uw, userID);
 
   try {
-    await removeFromWaitlist(uw, userID);
-  } catch {
-    // Ignore
+    await uw.waitlist.removeUser(userID);
+  } catch (err) {
+    // It's expected that the user would not be in the waitlist
+    if (!(err instanceof UserNotInWaitlistError)) {
+      throw err;
+    }
   }
 
   await uw.redis.lrem('users', 0, userID);
