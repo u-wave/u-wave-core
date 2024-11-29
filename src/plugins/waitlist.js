@@ -272,17 +272,17 @@ class Waitlist {
 
   /**
    * @param {UserID} userID
-   * @param {{moderator: User}} options
+   * @param {{moderator?: User}} [options]
    * @returns {Promise<void>}
    */
-  async removeUser(userID, { moderator }) {
+  async removeUser(userID, { moderator } = {}) {
     const { acl, users } = this.#uw;
     const user = await users.getUser(userID);
     if (!user) {
       throw new UserNotFoundError({ id: userID });
     }
 
-    const isRemoving = moderator && user.id !== moderator.id;
+    const isRemoving = moderator != null && user.id !== moderator.id;
     if (isRemoving && !(await acl.isAllowed(moderator, Permissions.WaitlistRemove))) {
       throw new PermissionError({
         requiredRole: 'waitlist.remove',
