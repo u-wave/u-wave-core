@@ -176,6 +176,10 @@ async function errorHandling(uw) {
   uw.logger.debug({ ns: 'uwave:http-api' }, 'setup HTTP error handling');
   uw.httpApi.use(errorHandler({
     onError(_req, error) {
+      if ('status' in error && typeof error.status === 'number' && error.status >= 400 && error.status < 500) {
+        return;
+      }
+
       uw.logger.error({ err: error, ns: 'uwave:http-api' });
     },
   }));

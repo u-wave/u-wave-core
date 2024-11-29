@@ -12,6 +12,7 @@ class ValidationError extends UwaveError {
     this.expose = true;
     this.name = 'ValidationError';
     this.code = 'SCHEMA_VALIDATION_FAILED';
+    this.status = 400;
 
     this.errors = errors;
   }
