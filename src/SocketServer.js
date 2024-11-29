@@ -130,13 +130,14 @@ class SocketServer {
   /**
    * Create a socket server.
    *
-   * @param {import('./Uwave.js').default} uw üWave Core instance.
+   * @param {import('./Uwave.js').Boot} uw üWave Core instance.
    * @param {object} options Socket server options.
    * @param {number} [options.timeout] Time in seconds to wait for disconnected
    *     users to reconnect before removing them.
    * @param {Buffer|string} options.secret
    * @param {import('http').Server | import('https').Server} [options.server]
    * @param {number} [options.port]
+   * @private
    */
   constructor(uw, options) {
     if (!uw) {
@@ -168,9 +169,7 @@ class SocketServer {
       port: options.server ? undefined : options.port,
     });
 
-    this.#redisSubscription.subscribe('uwave').catch((error) => {
-      this.#logger.error(error);
-    });
+    uw.use(() => this.#redisSubscription.subscribe('uwave'));
     this.#redisSubscription.on('message', (channel, command) => {
       // this returns a promise, but we don't handle the error case:
       // there is not much we can do, so just let node.js crash w/ an unhandled rejection
@@ -189,6 +188,9 @@ class SocketServer {
     }, ms('10 seconds'));
 
     this.#recountGuests = debounce(() => {
+      if (this.#closing) {
+        return;
+      }
       this.#recountGuestsInternal().catch((error) => {
         this.#logger.error({ err: error }, 'counting guests failed');
       });
@@ -697,11 +699,11 @@ class SocketServer {
       connection.close();
     }
 
+    this.#recountGuests.cancel();
+
     const closeWsServer = promisify(this.#wss.close.bind(this.#wss));
     await closeWsServer();
     await this.#redisSubscription.quit();
-
-    this.#recountGuests.cancel();
   }
 
   /**
