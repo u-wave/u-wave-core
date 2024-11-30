@@ -1,3 +1,4 @@
+import { setMaxListeners } from 'node:events';
 import fs from 'node:fs';
 import httpErrors from 'http-errors';
 import { AppTokenAuthProvider } from '@twurple/auth';
@@ -285,6 +286,8 @@ class Emotes {
     );
 
     const controller = new AbortController();
+    setMaxListeners(0, controller.signal);
+
     uw.onClose(() => {
       unsubscribe();
       controller.abort();
