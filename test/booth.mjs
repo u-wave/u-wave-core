@@ -5,6 +5,7 @@ import supertest from 'supertest';
 import createUwave from './utils/createUwave.mjs';
 import testSource from './utils/testSource.mjs';
 import { retryFor } from './utils/retry.mjs';
+import { randomUUID } from 'crypto';
 
 describe('Booth', () => {
   describe('GET /booth', () => {
@@ -238,6 +239,190 @@ describe('Booth', () => {
       });
 
       ws.close();
+    });
+  });
+
+  describe('POST /booth/favorite', () => {
+    let uw;
+    beforeEach(async () => {
+      uw = await createUwave('booth');
+    });
+    afterEach(async () => {
+      await uw.destroy();
+    });
+
+    it('requires authentication', async () => {
+      await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .expect(401);
+    });
+
+    it('validates input', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${token}`)
+        .send({})
+        .expect(400);
+
+      await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ playlistID: randomUUID() })
+        .expect(400);
+
+      await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ historyID: randomUUID() })
+        .expect(400);
+    });
+
+    it('cannot favorite when there is no booth', async () => {
+      const user = await uw.test.createUser();
+      const token = await uw.test.createTestSessionToken(user);
+
+      const res = await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ playlistID: randomUUID(), historyID: randomUUID() })
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'history-entry-not-found')),
+      });
+    });
+
+    it('reports error when playlist does not exist', async () => {
+      uw.source(testSource);
+
+      const dj = await uw.test.createUser();
+      await uw.acl.allow(dj, ['user']);
+
+      const token = await uw.test.createTestSessionToken(dj);
+
+      // Prep the account to be able to join the waitlist
+      const { playlist } = await uw.playlists.createPlaylist(dj, { name: 'booth' });
+      const item = await uw.source('test-source').getOne(dj, 'SELF_FAVORITE');
+      await uw.playlists.addPlaylistItems(playlist, [item]);
+      await uw.test.connectToWebSocketAs(dj);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: dj.id })
+        .expect(200);
+
+      const { body: booth } = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      assert(booth.data.historyID);
+
+      const user = await uw.test.createUser();
+      const favoriterToken = await uw.test.createTestSessionToken(user);
+
+      const res = await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${favoriterToken}`)
+        .send({ playlistID: randomUUID(), historyID: booth.data.historyID })
+        .expect(404);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'playlist-not-found')),
+      });
+    });
+
+    it('cannot favorite own play', async () => {
+      uw.source(testSource);
+
+      const user = await uw.test.createUser();
+      await uw.acl.allow(user, ['user']);
+
+      const token = await uw.test.createTestSessionToken(user);
+
+      // Prep the account to be able to join the waitlist
+      const { playlist } = await uw.playlists.createPlaylist(user, { name: 'booth' });
+      const item = await uw.source('test-source').getOne(user, 'SELF_FAVORITE');
+      await uw.playlists.addPlaylistItems(playlist, [item]);
+      await uw.test.connectToWebSocketAs(user);
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: user.id })
+        .expect(200);
+
+      const { body: booth } = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      assert(booth.data.historyID);
+
+      const res = await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ playlistID: playlist.id, historyID: booth.data.historyID })
+        .expect(403);
+      sinon.assert.match(res.body, {
+        errors: sinon.match.some(sinon.match.has('code', 'no-self-favorite')),
+      });
+    });
+
+    it('adds the item to the end of the playlist', async () => {
+      uw.source(testSource);
+
+      const dj = await uw.test.createUser();
+      await uw.acl.allow(dj, ['user']);
+      const favoriter = await uw.test.createUser();
+      await uw.acl.allow(favoriter, ['user']);
+
+      const token = await uw.test.createTestSessionToken(dj);
+
+      // Prep the DJ account to be able to join the waitlist
+      const { playlist } = await uw.playlists.createPlaylist(dj, { name: 'booth' });
+      const item = await uw.source('test-source').getOne(dj, 'SELF_FAVORITE');
+      await uw.playlists.addPlaylistItems(playlist, [item]);
+      await uw.test.connectToWebSocketAs(dj);
+
+      // Prep the favoriter account to grab the song
+      const favoriterToken = await uw.test.createTestSessionToken(favoriter);
+      const { playlist: favoriterPlaylist } = await uw.playlists.createPlaylist(favoriter, { name: 'favorites' });
+      await uw.playlists.addPlaylistItems(favoriterPlaylist, await uw.source('test-source').get(favoriter, ['ALREADY', 'THERE']));
+
+      await supertest(uw.server)
+        .post('/api/waitlist')
+        .set('Cookie', `uwsession=${token}`)
+        .send({ userID: dj.id })
+        .expect(200);
+
+      const { body: booth } = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      assert(booth.data.historyID);
+
+      const res = await supertest(uw.server)
+        .post('/api/booth/favorite')
+        .set('Cookie', `uwsession=${favoriterToken}`)
+        .send({ playlistID: favoriterPlaylist.id, historyID: booth.data.historyID })
+        .expect(200);
+      sinon.assert.match(res.body, {
+        data: [
+          sinon.match({ artist: 'artist SELF_FAVORITE', title: 'title SELF_FAVORITE' }),
+        ],
+        meta: sinon.match({ playlistSize: 3 }),
+      });
+
+      // Check that it was added at the end
+      const mediaRes = await supertest(uw.server)
+        .get(`/api/playlists/${favoriterPlaylist.id}/media`)
+        .set('Cookie', `uwsession=${favoriterToken}`)
+        .expect(200);
+      sinon.assert.match(mediaRes.body, {
+        data: [
+          sinon.match({ artist: 'artist ALREADY', title: 'title ALREADY' }),
+          sinon.match({ artist: 'artist THERE', title: 'title THERE' }),
+          sinon.match({ artist: 'artist SELF_FAVORITE', title: 'title SELF_FAVORITE' }),
+        ],
+      });
     });
   });
 });
