@@ -340,6 +340,8 @@ export class SqliteDriver {
 /** @implements {ky.DatabaseConnection} */
 class SqliteConnection {
   #db;
+  /** @type {null | { stmt: import('better-sqlite3').Statement, sql: string }} */
+  #cache = null;
 
   /** @param {import('better-sqlite3').Database} db */
   constructor(db) {
@@ -362,13 +364,24 @@ class SqliteConnection {
     this.#db.exec('ROLLBACK');
   }
 
+  /** @param {string} sql */
+  #prepare(sql) {
+    if (this.#cache != null && this.#cache.sql === sql) {
+      return this.#cache.stmt;
+    }
+    const stmt = this.#db.prepare(sql);
+    this.#cache = { sql, stmt };
+    return stmt;
+  }
+
   /**
    * @template O
    * @param {ky.CompiledQuery<unknown>} compiledQuery
    * @returns {Promise<ky.QueryResult<O>>}
    */
   async executeQuery(compiledQuery) {
-    const stmt = this.#db.prepare(compiledQuery.sql);
+    const stmt = this.#prepare(compiledQuery.sql);
+
     if (stmt.reader) {
       return {
         rows: /** @type {O[]} */ (stmt.all(compiledQuery.parameters)),
@@ -392,9 +405,9 @@ class SqliteConnection {
    */
   async* streamQuery(compiledQuery, chunkSize) {
     const all = await this.executeQuery(compiledQuery);
-    void chunkSize;
     for (const row of all.rows) {
       yield { rows: [row] };
     }
+    void chunkSize;
   }
 }
