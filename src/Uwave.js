@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import Redis from 'ioredis';
 import avvio from 'avvio';
 import { pino } from 'pino';
-import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely';
+import { CamelCasePlugin, Kysely } from 'kysely';
 import httpApi, { errorHandling } from './HttpApi.js';
 import SocketServer from './SocketServer.js';
 import { Source } from './Source.js';
@@ -20,7 +20,7 @@ import acl from './plugins/acl.js';
 import waitlist from './plugins/waitlist.js';
 import passport from './plugins/passport.js';
 import migrations from './plugins/migrations.js';
-import { SqliteDateColumnsPlugin, connect as connectSqlite } from './utils/sqlite.js';
+import { SqliteDateColumnsPlugin, SqliteDialect, connect as connectSqlite } from './utils/sqlite.js';
 
 const DEFAULT_SQLITE_PATH = './uwave.sqlite';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
@@ -154,6 +154,7 @@ class UwaveServer extends EventEmitter {
     this.db = new Kysely({
       dialect: new SqliteDialect({
         database: () => connectSqlite(options.sqlite ?? DEFAULT_SQLITE_PATH),
+        logger: this.logger.child({ ns: 'uwave:sqlite' }),
       }),
       // dialect: new PostgresDialect({
       //   pool: new pg.Pool({

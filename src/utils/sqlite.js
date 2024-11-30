@@ -1,4 +1,5 @@
 import lodash from 'lodash';
+import * as ky from 'kysely';
 import { sql, OperationNodeTransformer } from 'kysely';
 
 /**
@@ -235,4 +236,147 @@ export async function connect(path) {
  */
 export function isForeignKeyError(err) {
   return err instanceof Error && 'code' in err && err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY';
+}
+
+/**
+ * @typedef {{
+ *   database: () => Promise<import('better-sqlite3').Database>,
+ *   logger?: import('pino').Logger,
+ * }} SqliteDialectConfig */
+
+/** @implements {ky.Dialect} */
+export class SqliteDialect {
+  #config;
+
+  /** @param {SqliteDialectConfig} config */
+  constructor(config) {
+    this.#config = config;
+  }
+
+  createAdapter() {
+    return new ky.SqliteAdapter()
+  }
+
+  createQueryCompiler() {
+    return new ky.SqliteQueryCompiler()
+  }
+
+  /** @param {ky.Kysely<unknown>} db */
+  createIntrospector(db) {
+    return new ky.SqliteIntrospector(db)
+  }
+
+  createDriver() {
+    return new SqliteDriver(this.#config);
+  }
+}
+/** @implements {ky.Driver} */
+export class SqliteDriver {
+  #config;
+
+  #connections = 0;
+
+  /** @param {SqliteDialectConfig} config */
+  constructor(config) {
+    this.#config = config;
+  }
+
+  async init() {}
+
+  async acquireConnection () {
+    this.#connections += 1;
+    this.#config.logger?.debug({ active: this.#connections }, 'acquire connection');
+
+    const db = await this.#config.database();
+    return new SqliteConnection(db);
+  }
+
+  /** @param {SqliteConnection} db */
+  async releaseConnection(db) {
+    this.#connections -= 1;
+    this.#config.logger?.debug({ active: this.#connections }, 'release connection');
+
+    db.release();
+  }
+
+  /** @param {SqliteConnection} db */
+  async beginTransaction(db) {
+    db._beginTransaction();
+  }
+
+  /** @param {SqliteConnection} db */
+  async commitTransaction(db) {
+    db._commitTransaction();
+  }
+
+  /** @param {SqliteConnection} db */
+  async rollbackTransaction(db) {
+    db._rollbackTransaction();
+  }
+
+  async destroy() {
+    // Nothing to do :)
+  }
+}
+
+/** @implements {ky.DatabaseConnection} */
+class SqliteConnection {
+  #db;
+
+  /** @param {import('better-sqlite3').Database} db */
+  constructor(db) {
+    this.#db = db;
+  }
+
+  release() {
+    this.#db.close();
+  }
+
+  _beginTransaction() {
+    this.#db.exec('BEGIN IMMEDIATE');
+  }
+
+  _commitTransaction() {
+    this.#db.exec('COMMIT');
+  }
+
+  _rollbackTransaction() {
+    this.#db.exec('ROLLBACK');
+  }
+
+  /**
+   * @template O
+   * @param {ky.CompiledQuery<unknown>} compiledQuery
+   * @returns {Promise<ky.QueryResult<O>>}
+   */
+  async executeQuery(compiledQuery) {
+    const stmt = this.#db.prepare(compiledQuery.sql);
+    if (stmt.reader) {
+      return {
+        rows: /** @type {O[]} */ (stmt.all(compiledQuery.parameters)),
+      };
+    }
+
+    const { changes, lastInsertRowid } = stmt.run(compiledQuery.parameters);
+    return {
+      numUpdatedOrDeletedRows: changes != null ? BigInt(changes) : undefined,
+      numAffectedRows: changes != null ? BigInt(changes) : undefined,
+      insertId: lastInsertRowid != null ? BigInt(lastInsertRowid) : undefined,
+      rows: [],
+    };
+  }
+
+  /**
+   * @template O
+   * @param {ky.CompiledQuery<unknown>} compiledQuery
+   * @param {number} chunkSize
+   * @returns {AsyncIterableIterator<ky.QueryResult<O>>}
+   */
+  async* streamQuery(compiledQuery, chunkSize) {
+    const all = await this.executeQuery(compiledQuery);
+    void chunkSize;
+    for (const row of all.rows) {
+      yield { rows: [row] };
+    }
+  }
 }
