@@ -1,5 +1,6 @@
 import lodash from 'lodash';
 import * as ky from 'kysely';
+import { createPool } from 'generic-pool';
 import { sql, OperationNodeTransformer } from 'kysely';
 
 /**
@@ -273,49 +274,66 @@ export class SqliteDialect {
 /** @implements {ky.Driver} */
 export class SqliteDriver {
   #config;
-
-  #connections = 0;
+  #pool;
 
   /** @param {SqliteDialectConfig} config */
   constructor(config) {
     this.#config = config;
+    this.#pool = createPool({
+      create: async () => new SqliteConnection(await this.#config.database()),
+      destroy: async (db) => {
+        db.release();
+      },
+    }, {
+      min: 1,
+      max: 8,
+    });
   }
 
-  async init() {}
+  async init() {
+    await this.#pool.ready();
+  }
 
   async acquireConnection () {
-    this.#connections += 1;
-    this.#config.logger?.debug({ active: this.#connections }, 'acquire connection');
+    this.#config.logger?.debug({
+      size: this.#pool.size,
+      available: this.#pool.available,
+      borrowed: this.#pool.borrowed,
+    }, 'acquire connection');
 
-    const db = await this.#config.database();
-    return new SqliteConnection(db);
+    const connection = await this.#pool.acquire();
+    return connection;
   }
 
-  /** @param {SqliteConnection} db */
-  async releaseConnection(db) {
-    this.#connections -= 1;
-    this.#config.logger?.debug({ active: this.#connections }, 'release connection');
+  /** @param {SqliteConnection} connection */
+  async releaseConnection(connection) {
+    this.#config.logger?.debug({
+      size: this.#pool.size,
+      available: this.#pool.available,
+      borrowed: this.#pool.borrowed,
+    }, 'release connection');
 
-    db.release();
+    await this.#pool.release(connection);
   }
 
-  /** @param {SqliteConnection} db */
-  async beginTransaction(db) {
-    db._beginTransaction();
+  /** @param {SqliteConnection} connection */
+  async beginTransaction(connection) {
+    connection._beginTransaction();
   }
 
-  /** @param {SqliteConnection} db */
-  async commitTransaction(db) {
-    db._commitTransaction();
+  /** @param {SqliteConnection} connection */
+  async commitTransaction(connection) {
+    connection._commitTransaction();
   }
 
-  /** @param {SqliteConnection} db */
-  async rollbackTransaction(db) {
-    db._rollbackTransaction();
+  /** @param {SqliteConnection} connection */
+  async rollbackTransaction(connection) {
+    connection._rollbackTransaction();
   }
 
   async destroy() {
-    // Nothing to do :)
+    await this.#pool.drain();
+    await this.#pool.clear();
   }
 }
 
