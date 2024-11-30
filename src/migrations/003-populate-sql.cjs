@@ -542,6 +542,7 @@ async function up({ context: uw }) {
           id: userID,
           username: user.username,
           slug: user.slug,
+          avatar: user.avatar,
           createdAt: user.createdAt.toISOString(),
           updatedAt: (user.updatedAt ?? user.createdAt).toISOString(),
         })
