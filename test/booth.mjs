@@ -367,7 +367,7 @@ describe('Booth', () => {
       });
     });
 
-    it('adds the item to the end of the playlist', async () => {
+    it('adds the item to the end of the playlist and records favorite stat', async () => {
       uw.source(testSource);
 
       const dj = await uw.test.createUser();
@@ -381,7 +381,11 @@ describe('Booth', () => {
       const { playlist } = await uw.playlists.createPlaylist(dj, { name: 'booth' });
       const item = await uw.source('test-source').getOne(dj, 'SELF_FAVORITE');
       await uw.playlists.addPlaylistItems(playlist, [item]);
-      await uw.test.connectToWebSocketAs(dj);
+      const ws = await uw.test.connectToWebSocketAs(dj);
+      const receivedMessages = [];
+      ws.on('message', (data, isBinary) => {
+        receivedMessages.push(JSON.parse(isBinary ? data.toString() : data));
+      });
 
       // Prep the favoriter account to grab the song
       const favoriterToken = await uw.test.createTestSessionToken(favoriter);
@@ -422,6 +426,22 @@ describe('Booth', () => {
           sinon.match({ artist: 'artist THERE', title: 'title THERE' }),
           sinon.match({ artist: 'artist SELF_FAVORITE', title: 'title SELF_FAVORITE' }),
         ],
+      });
+
+      // Check that an event was emitted
+      sinon.assert.match(receivedMessages, sinon.match.some(sinon.match({
+        command: 'favorite',
+        data: { userID: favoriter.id },
+      })));
+
+      // Check that the favorite is reported in vote stats
+      const { body: stats } = await supertest(uw.server)
+        .get('/api/booth')
+        .expect(200);
+      sinon.assert.match(stats.data, {
+        stats: sinon.match({
+          favorites: sinon.match.some(sinon.match(favoriter.id)),
+        }),
       });
     });
   });
