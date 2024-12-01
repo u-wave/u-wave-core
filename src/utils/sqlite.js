@@ -404,10 +404,21 @@ class SqliteConnection {
    * @returns {AsyncIterableIterator<ky.QueryResult<O>>}
    */
   async* streamQuery(compiledQuery, chunkSize) {
-    const all = await this.executeQuery(compiledQuery);
-    for (const row of all.rows) {
-      yield { rows: [row] };
+    const stmt = this.#prepare(compiledQuery.sql);
+    if (!stmt.reader) {
+      throw new Error('only SELECT queries can be streamed');
     }
-    void chunkSize;
+
+    let chunk = [];
+    for (const row of stmt.iterate(compiledQuery.parameters)) {
+      chunk.push(/** @type {O} */ (row));
+      if (chunk.length >= chunkSize) {
+        yield { rows: chunk };
+        chunk = [];
+      }
+    }
+    if (chunk.length > 0) {
+      yield { rows: chunk };
+    }
   }
 }
