@@ -86,6 +86,7 @@ async function httpApi(uw, options) {
 
   const logger = uw.logger.child({
     ns: 'uwave:http-api',
+    level: 'warn',
   });
 
   uw.config.register(optionsSchema['uw:key'], optionsSchema);

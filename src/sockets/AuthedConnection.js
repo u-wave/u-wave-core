@@ -10,14 +10,16 @@ class AuthedConnection extends EventEmitter {
    * @param {import('../Uwave.js').default} uw
    * @param {import('ws').WebSocket} socket
    * @param {import('../schema.js').User} user
+   * @param {string} sessionID
    */
-  constructor(uw, socket, user) {
+  constructor(uw, socket, user, sessionID) {
     super();
     this.uw = uw;
     this.socket = socket;
     this.events = new Ultron(this.socket);
     this.user = user;
-    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'AuthedConnection', userId: this.user.id });
+    this.sessionID = sessionID;
+    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'AuthedConnection', userId: this.user.id, sessionID });
 
     this.events.on('close', () => {
       this.emit('close', { banned: this.banned });
@@ -32,14 +34,14 @@ class AuthedConnection extends EventEmitter {
    * @private
    */
   get key() {
-    return `http-api:disconnected:${this.user.id}`;
+    return `http-api:disconnected:${this.sessionID}`;
   }
 
   /**
    * @private
    */
   get messagesKey() {
-    return `http-api:disconnected:${this.user.id}:messages`;
+    return `http-api:disconnected:${this.sessionID}:messages`;
   }
 
   /**

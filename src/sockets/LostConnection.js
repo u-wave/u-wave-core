@@ -6,13 +6,15 @@ class LostConnection extends EventEmitter {
   /**
    * @param {import('../Uwave.js').default} uw
    * @param {import('../schema.js').User} user
+   * @param {string} sessionID
    */
-  constructor(uw, user, timeout = 30) {
+  constructor(uw, user, sessionID, timeout = 30) {
     super();
     this.uw = uw;
     this.user = user;
+    this.sessionID = sessionID;
     this.timeout = timeout;
-    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'LostConnection', userId: this.user.id });
+    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'LostConnection', userID: this.user.id, sessionID });
 
     this.initQueued();
     this.setTimeout(timeout);
@@ -22,14 +24,14 @@ class LostConnection extends EventEmitter {
    * @private
    */
   get key() {
-    return `http-api:disconnected:${this.user.id}`;
+    return `http-api:disconnected:${this.sessionID}`;
   }
 
   /**
    * @private
    */
   get messagesKey() {
-    return `http-api:disconnected:${this.user.id}:messages`;
+    return `http-api:disconnected:${this.sessionID}:messages`;
   }
 
   /**

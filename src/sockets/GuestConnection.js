@@ -41,8 +41,8 @@ class GuestConnection extends EventEmitter {
     const { bans, users } = this.uw;
     const { authRegistry } = this.options;
 
-    const userID = await authRegistry.getTokenUser(token);
-    if (!userID || typeof userID !== 'string') {
+    const { userID, sessionID } = await authRegistry.getTokenUser(token);
+    if (!sessionID || typeof sessionID !== 'string') {
       throw new Error('Invalid token');
     }
     const userModel = await users.getUser(userID);
@@ -57,14 +57,14 @@ class GuestConnection extends EventEmitter {
       throw new Error('You have been banned');
     }
 
-    this.emit('authenticate', userModel);
+    this.emit('authenticate', userModel, sessionID);
   }
 
   /**
-   * @param {import('../schema.js').User} user
+   * @param {string} sessionID
    */
-  isReconnect(user) {
-    return this.uw.redis.exists(`http-api:disconnected:${user.id}`);
+  isReconnect(sessionID) {
+    return this.uw.redis.exists(`http-api:disconnected:${sessionID}`);
   }
 
   /**

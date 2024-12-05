@@ -71,16 +71,17 @@ async function getAuthStrategies(req) {
  * @param {import('express').Response} res
  * @param {import('../HttpApi.js').HttpApi} api
  * @param {import('../schema.js').User} user
+ * @param {string} sessionID
  * @param {AuthenticateOptions & { session: 'cookie' | 'token' }} options
  */
-async function refreshSession(res, api, user, options) {
+async function refreshSession(res, api, user, sessionID, options) {
   const token = jwt.sign(
     { id: user.id },
     options.secret,
     { expiresIn: '31d' },
   );
 
-  const socketToken = await api.authRegistry.createAuthToken(user);
+  const socketToken = await api.authRegistry.createAuthToken(user, sessionID);
 
   if (options.session === 'cookie') {
     const serialized = cookie.serialize('uwsession', token, {
@@ -117,7 +118,7 @@ async function login(req, res) {
     throw new BannedError();
   }
 
-  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, {
+  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
     ...options,
     session: sessionType,
   });
@@ -189,7 +190,7 @@ async function socialLoginCallback(service, req, res) {
     window.close();
   `;
 
-  await refreshSession(res, req.uwaveHttp, user, {
+  await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
     ...req.authOptions,
     session: 'cookie',
   });
@@ -262,7 +263,7 @@ async function socialLoginFinish(service, req, res) {
 
   Object.assign(user, updates);
 
-  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, {
+  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
     ...options,
     session: sessionType,
   });
@@ -279,10 +280,10 @@ async function socialLoginFinish(service, req, res) {
  * @type {import('../types.js').AuthenticatedController}
  */
 async function getSocketToken(req) {
-  const { user } = req;
+  const { user, sessionID } = req;
   const { authRegistry } = req.uwaveHttp;
 
-  const socketToken = await authRegistry.createAuthToken(user);
+  const socketToken = await authRegistry.createAuthToken(user, sessionID);
 
   return toItemResponse({ socketToken }, {
     url: req.fullUrl,
@@ -479,7 +480,6 @@ export {
   getSocketToken,
   login,
   logout,
-  refreshSession,
   register,
   removeSession,
   reset,
