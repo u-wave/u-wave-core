@@ -122,11 +122,49 @@ async function httpApi(uw, options) {
         secure: uw.express.get('env') === 'production',
         httpOnly: true,
       },
+      store: new class extends session.Store {
+        /**
+         * @param {string} sid
+         * @param {(err?: Error, data?: session.SessionData | null) => void} callback
+         */
+        get (sid, callback) {
+          uw.redis.get(`session:${sid}`).then((data) => {
+            callback(undefined, data == null ? null : JSON.parse(data));
+          }, (err) => {
+            callback(err);
+          })
+        }
+
+        /**
+         * @param {string} sid
+         * @param {session.SessionData} data
+         * @param {(err?: Error) => void} callback
+         */
+        set(sid, data, callback) {
+          uw.redis.set(`session:${sid}`, JSON.stringify(data)).then(() => {
+            callback();
+          }, (err) => {
+            callback(err);
+          })
+        }
+
+        /**
+         * @param {string} sid
+         * @param {(err?: Error) => void} callback
+         */
+        destroy(sid, callback) {
+          uw.redis.del(`session:${sid}`).then(() => {
+            callback();
+          }, (err) => {
+            callback(err);
+          })
+        }
+      },
     }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
     .use(attachUwaveMeta(uw.httpApi, uw))
-    .use(uw.passport.authenticate('jwt'))
+    .use(uw.passport.session())
     .use(rateLimit('api-http', { max: 500, duration: 60 * 1000 }));
 
   uw.httpApi
