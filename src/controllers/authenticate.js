@@ -3,7 +3,6 @@ import cookie from 'cookie';
 import jwt from 'jsonwebtoken';
 import randomString from 'random-string';
 import nodeFetch from 'node-fetch';
-import ms from 'ms';
 import htmlescape from 'htmlescape';
 import httpErrors from 'http-errors';
 import nodemailer from 'nodemailer';
@@ -36,13 +35,6 @@ const { BadRequest } = httpErrors;
  * @typedef {object} WithAuthOptions
  * @prop {AuthenticateOptions} authOptions
  */
-
-/**
- * @param {string} str
- */
-function seconds(str) {
-  return Math.floor(ms(str) / 1000);
-}
 
 /**
  * @type {import('../types.js').Controller}

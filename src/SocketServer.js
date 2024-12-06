@@ -455,7 +455,9 @@ class SocketServer {
    */
   async initLostConnections() {
     const { db, redis } = this.#uw;
-    const userIDs = /** @type {import('./schema').UserID[]} */ (await redis.lrange(REDIS_ACTIVE_SESSIONS, 0, -1));
+    const userIDs = /** @type {import('./schema').UserID[]} */ (
+      await redis.lrange(REDIS_ACTIVE_SESSIONS, 0, -1)
+    );
     const disconnectedIDs = userIDs.filter((userID) => !this.connection(userID));
 
     if (disconnectedIDs.length === 0) {

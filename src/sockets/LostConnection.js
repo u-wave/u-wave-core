@@ -14,7 +14,9 @@ class LostConnection extends EventEmitter {
     this.user = user;
     this.sessionID = sessionID;
     this.timeout = timeout;
-    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'LostConnection', userID: this.user.id, sessionID });
+    this.#logger = uw.logger.child({
+      ns: 'uwave:sockets', connectionType: 'LostConnection', userID: this.user.id, sessionID,
+    });
 
     this.initQueued();
     this.setTimeout(timeout);

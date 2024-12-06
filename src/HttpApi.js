@@ -127,12 +127,12 @@ async function httpApi(uw, options) {
          * @param {string} sid
          * @param {(err?: Error, data?: session.SessionData | null) => void} callback
          */
-        get (sid, callback) {
+        get(sid, callback) {
           uw.redis.get(`session:${sid}`).then((data) => {
             callback(undefined, data == null ? null : JSON.parse(data));
           }, (err) => {
             callback(err);
-          })
+          });
         }
 
         /**
@@ -145,7 +145,7 @@ async function httpApi(uw, options) {
             callback();
           }, (err) => {
             callback(err);
-          })
+          });
         }
 
         /**
@@ -157,9 +157,9 @@ async function httpApi(uw, options) {
             callback();
           }, (err) => {
             callback(err);
-          })
+          });
         }
-      },
+      }(),
     }))
     .use(uw.passport.initialize())
     .use(addFullUrl())

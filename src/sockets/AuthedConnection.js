@@ -19,7 +19,9 @@ class AuthedConnection extends EventEmitter {
     this.events = new Ultron(this.socket);
     this.user = user;
     this.sessionID = sessionID;
-    this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'AuthedConnection', userId: this.user.id, sessionID });
+    this.#logger = uw.logger.child({
+      ns: 'uwave:sockets', connectionType: 'AuthedConnection', userId: this.user.id, sessionID,
+    });
 
     this.events.on('close', () => {
       this.emit('close', { banned: this.banned });
