@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import cookie from 'cookie';
 import jwt from 'jsonwebtoken';
@@ -60,19 +61,21 @@ async function getAuthStrategies(req) {
 }
 
 /**
- * @param {import('../HttpApi.js').HttpApi} api
- * @param {import('../schema.js').User} user
- * @param {string} sessionID
+ * @param {import('../types.js').Request} req
+ * @param {import('../schema').User} user
  * @param {AuthenticateOptions & { session: 'cookie' | 'token' }} options
  */
-async function refreshSession(api, user, sessionID, options) {
+async function refreshSession(req, user, options) {
+  const { authRegistry } = req.uwaveHttp;
+  const sessionID = req.authInfo?.sessionID ?? req.sessionID;
+
   const token = jwt.sign(
-    { id: user.id },
+    { id: user.id, sessionID: randomUUID() },
     options.secret,
     { expiresIn: '31d' },
   );
 
-  const socketToken = await api.authRegistry.createAuthToken(user, sessionID);
+  const socketToken = await authRegistry.createAuthToken(user, sessionID);
 
   if (options.session === 'cookie') {
     return { token: 'cookie', socketToken };
@@ -101,10 +104,11 @@ async function login(req) {
     throw new BannedError();
   }
 
-  const { token, socketToken } = await refreshSession(req.uwaveHttp, user, req.sessionID, {
-    ...options,
-    session: sessionType,
-  });
+  const { token, socketToken } = await refreshSession(
+    req,
+    user,
+    { ...options, session: sessionType },
+  );
 
   return toItemResponse(serializeCurrentUser(user), {
     meta: {
@@ -173,10 +177,7 @@ async function socialLoginCallback(service, req, res) {
     window.close();
   `;
 
-  await refreshSession(req.uwaveHttp, user, req.sessionID, {
-    ...req.authOptions,
-    session: 'cookie',
-  });
+  await refreshSession(req, user, { ...req.authOptions, session: 'cookie' });
 
   res.end(`
     <!DOCTYPE html>
@@ -245,10 +246,23 @@ async function socialLoginFinish(service, req) {
 
   Object.assign(user, updates);
 
-  const { token, socketToken } = await refreshSession(req.uwaveHttp, user, req.sessionID, {
-    ...options,
-    session: sessionType,
-  });
+  const passportLogin = promisify(
+    /**
+     * @type {(
+     *   user: Express.User,
+     *   options: import('passport').LogInOptions,
+     *   callback: (err: any) => void,
+     * ) => void}
+     */
+    (req.login),
+  );
+  await passportLogin(user, { session: sessionType === 'cookie' });
+
+  const { token, socketToken } = await refreshSession(
+    req,
+    user,
+    { ...options, session: sessionType },
+  );
 
   return toItemResponse(user, {
     meta: {

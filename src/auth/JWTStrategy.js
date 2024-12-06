@@ -110,7 +110,11 @@ class JWTStrategy extends Strategy {
       throw new BannedError();
     }
 
-    return this.success(user);
+    const info = 'sessionID' in value && typeof value.sessionID === 'string'
+      ? { sessionID: value.sessionID }
+      : undefined;
+
+    return this.success(user, info);
   }
 }
 

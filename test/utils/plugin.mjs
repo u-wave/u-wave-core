@@ -43,7 +43,7 @@ async function testPlugin(uw) {
 
   async function createTestSessionToken(user) {
     const token = jwt.sign(
-      { id: user.id },
+      { id: user.id, sessionID: randomUUID() },
       uw.options.secret,
       { expiresIn: '1d' },
     );
