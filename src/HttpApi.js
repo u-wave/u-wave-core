@@ -164,7 +164,7 @@ async function httpApi(uw, options) {
     .use(uw.passport.initialize())
     .use(addFullUrl())
     .use(attachUwaveMeta(uw.httpApi, uw))
-    .use(uw.passport.authenticate('jwt'))
+    .use(uw.passport.authenticate('jwt', { session: false }))
     .use(uw.passport.session())
     .use(rateLimit('api-http', { max: 500, duration: 60 * 1000 }));
 
