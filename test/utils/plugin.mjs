@@ -20,9 +20,10 @@ async function testPlugin(uw) {
       .executeTakeFirstOrThrow();
   }
 
-  async function connectToWebSocketAs(user) {
+  async function connectToWebSocketAs(user, session) {
     const { port } = uw.server.address();
-    const token = await uw.socketServer.authRegistry.createAuthToken(user);
+
+    const token = await uw.socketServer.authRegistry.createAuthToken(user, session ?? randomUUID());
 
     const ws = new WebSocket(`ws://localhost:${port}`);
     await events.once(ws, 'open');
@@ -43,7 +44,7 @@ async function testPlugin(uw) {
 
   async function createTestSessionToken(user) {
     const token = jwt.sign(
-      { id: user.id },
+      { id: user.id, sessionID: randomUUID() },
       uw.options.secret,
       { expiresIn: '1d' },
     );

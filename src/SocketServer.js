@@ -15,6 +15,8 @@ import { serializeUser } from './utils/serialize.js';
 
 const { debounce, isEmpty } = lodash;
 
+export const REDIS_ACTIVE_SESSIONS = 'users';
+
 /**
  * @typedef {import('./schema.js').User} User
  */
@@ -76,7 +78,7 @@ class SocketServer {
         // We do need to clear the `users` list because the lost connection handlers
         // will not do so.
         uw.socketServer.#logger.warn({ err }, 'could not initialise lost connections');
-        await uw.redis.del('users');
+        await uw.redis.del(REDIS_ACTIVE_SESSIONS);
       }
     });
 
@@ -394,7 +396,7 @@ class SocketServer {
         const user = await users.getUser(userID);
         if (user) {
           // TODO this should not be the socket server code's responsibility
-          await redis.rpush('users', user.id);
+          await redis.rpush(REDIS_ACTIVE_SESSIONS, user.id);
           this.broadcast('join', serializeUser(user));
         }
       },
@@ -453,7 +455,9 @@ class SocketServer {
    */
   async initLostConnections() {
     const { db, redis } = this.#uw;
-    const userIDs = /** @type {import('./schema').UserID[]} */ (await redis.lrange('users', 0, -1));
+    const userIDs = /** @type {import('./schema').UserID[]} */ (
+      await redis.lrange(REDIS_ACTIVE_SESSIONS, 0, -1)
+    );
     const disconnectedIDs = userIDs.filter((userID) => !this.connection(userID));
 
     if (disconnectedIDs.length === 0) {
@@ -465,7 +469,7 @@ class SocketServer {
       .selectAll()
       .execute();
     disconnectedUsers.forEach((user) => {
-      this.add(this.createLostConnection(user));
+      this.add(this.createLostConnection(user, 'TODO: Actual session ID!!'));
     });
   }
 
@@ -529,15 +533,15 @@ class SocketServer {
     connection.on('close', () => {
       this.remove(connection);
     });
-    connection.on('authenticate', async (user) => {
-      const isReconnect = await connection.isReconnect(user);
+    connection.on('authenticate', async (user, sessionID) => {
+      const isReconnect = await connection.isReconnect(sessionID);
       this.#logger.info({ userId: user.id, isReconnect }, 'authenticated socket');
       if (isReconnect) {
-        const previousConnection = this.getLostConnection(user);
+        const previousConnection = this.getLostConnection(sessionID);
         if (previousConnection) this.remove(previousConnection);
       }
 
-      this.replace(connection, this.createAuthedConnection(socket, user));
+      this.replace(connection, this.createAuthedConnection(socket, user, sessionID));
 
       if (!isReconnect) {
         this.#uw.publish('user:join', { userID: user.id });
@@ -551,18 +555,19 @@ class SocketServer {
    *
    * @param {import('ws').WebSocket} socket
    * @param {User} user
+   * @param {string} sessionID
    * @returns {AuthedConnection}
    * @private
    */
-  createAuthedConnection(socket, user) {
-    const connection = new AuthedConnection(this.#uw, socket, user);
+  createAuthedConnection(socket, user, sessionID) {
+    const connection = new AuthedConnection(this.#uw, socket, user, sessionID);
     connection.on('close', ({ banned }) => {
       if (banned) {
         this.#logger.info({ userId: user.id }, 'removing connection after ban');
         disconnectUser(this.#uw, user.id);
       } else if (!this.#closing) {
         this.#logger.info({ userId: user.id }, 'lost connection');
-        this.add(this.createLostConnection(user));
+        this.add(this.createLostConnection(user, sessionID));
       }
       this.remove(connection);
     });
@@ -594,11 +599,12 @@ class SocketServer {
    * Create a connection instance for a user who disconnected.
    *
    * @param {User} user
+   * @param {string} sessionID
    * @returns {LostConnection}
    * @private
    */
-  createLostConnection(user) {
-    const connection = new LostConnection(this.#uw, user, this.options.timeout);
+  createLostConnection(user, sessionID) {
+    const connection = new LostConnection(this.#uw, user, sessionID, this.options.timeout);
     connection.on('close', () => {
       this.#logger.info({ userId: user.id }, 'user left');
       this.remove(connection);
@@ -618,8 +624,9 @@ class SocketServer {
    * @private
    */
   add(connection) {
-    const userId = 'user' in connection ? connection.user.id : null;
-    this.#logger.trace({ type: connection.constructor.name, userId }, 'add connection');
+    const userID = 'user' in connection ? connection.user.id : null;
+    const sessionID = 'sessionID' in connection ? connection.sessionID : null;
+    this.#logger.trace({ type: connection.constructor.name, userID, sessionID }, 'add connection');
 
     this.#connections.push(connection);
     this.#recountGuests();
@@ -632,8 +639,9 @@ class SocketServer {
    * @private
    */
   remove(connection) {
-    const userId = 'user' in connection ? connection.user.id : null;
-    this.#logger.trace({ type: connection.constructor.name, userId }, 'remove connection');
+    const userID = 'user' in connection ? connection.user.id : null;
+    const sessionID = 'sessionID' in connection ? connection.sessionID : null;
+    this.#logger.trace({ type: connection.constructor.name, userID, sessionID }, 'remove connection');
 
     const i = this.#connections.indexOf(connection);
     this.#connections.splice(i, 1);

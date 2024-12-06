@@ -26,6 +26,10 @@ declare global {
       authOptions?: AuthenticateOptions;
       fullUrl: string;
     }
+    interface AuthInfo {
+      /** A session ID provided through some other means than the actual session. */
+      sessionID?: string;
+    }
   }
 }
 

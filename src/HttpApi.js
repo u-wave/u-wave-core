@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
+import { RedisStore } from 'connect-redis';
 import qs from 'qs';
 import { pinoHttp } from 'pino-http';
 
@@ -86,6 +87,7 @@ async function httpApi(uw, options) {
 
   const logger = uw.logger.child({
     ns: 'uwave:http-api',
+    level: 'warn',
   });
 
   uw.config.register(optionsSchema['uw:key'], optionsSchema);
@@ -121,11 +123,15 @@ async function httpApi(uw, options) {
         secure: uw.express.get('env') === 'production',
         httpOnly: true,
       },
+      store: new RedisStore({
+        client: uw.redis,
+      }),
     }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
     .use(attachUwaveMeta(uw.httpApi, uw))
-    .use(uw.passport.authenticate('jwt'))
+    .use(uw.passport.authenticate('jwt', { session: false }))
+    .use(uw.passport.session())
     .use(rateLimit('api-http', { max: 500, duration: 60 * 1000 }));
 
   uw.httpApi

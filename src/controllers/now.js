@@ -1,6 +1,7 @@
 import { getBoothData } from './booth.js';
 import { serializeCurrentUser, serializePlaylist, serializeUser } from '../utils/serialize.js';
 import { legacyPlaylistItem } from './playlists.js';
+import { REDIS_ACTIVE_SESSIONS } from '../SocketServer.js';
 
 /**
  * @typedef {import('../schema.js').UserID} UserID
@@ -35,7 +36,7 @@ function toInt(str) {
  * @param {import('../Uwave.js').default} uw
  */
 async function getOnlineUsers(uw) {
-  const userIDs = /** @type {UserID[]} */ (await uw.redis.lrange('users', 0, -1));
+  const userIDs = /** @type {UserID[]} */ (await uw.redis.lrange(REDIS_ACTIVE_SESSIONS, 0, -1));
   if (userIDs.length === 0) {
     return [];
   }
@@ -59,7 +60,7 @@ async function getState(req) {
   const uw = req.uwave;
   const { authRegistry } = req.uwaveHttp;
   const { passport } = uw;
-  const { user } = req;
+  const { user, sessionID } = req;
 
   const motd = uw.motd.get();
   const users = getOnlineUsers(uw);
@@ -86,7 +87,7 @@ async function getState(req) {
   const firstActivePlaylistItem = activePlaylist.then((playlist) => (
     playlist != null ? getFirstItem(uw, playlist) : null
   ));
-  const socketToken = user ? authRegistry.createAuthToken(user) : null;
+  const socketToken = user ? authRegistry.createAuthToken(user, sessionID) : null;
   const authStrategies = passport.strategies();
   const time = Date.now();
 

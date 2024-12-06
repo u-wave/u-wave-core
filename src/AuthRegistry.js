@@ -16,10 +16,11 @@ class AuthRegistry {
 
   /**
    * @param {import('./schema.js').User} user
+   * @param {string} sessionID
    */
-  async createAuthToken(user) {
+  async createAuthToken(user, sessionID) {
     const token = (await randomBytes(64)).toString('hex');
-    await this.#redis.set(`http-api:socketAuth:${token}`, user.id, 'EX', 60);
+    await this.#redis.set(`http-api:socketAuth:${token}`, `${user.id}/${sessionID}`, 'EX', 60);
     return token;
   }
 
@@ -37,12 +38,23 @@ class AuthRegistry {
       .exec();
     assert(result);
 
-    const [err, userID] = result[0];
+    const [err, authParts] = result[0];
     if (err) {
       throw err;
     }
+    if (typeof authParts !== 'string') {
+      throw new Error('Invalid auth parts');
+    }
 
-    return /** @type {import('./schema.js').UserID} */ (userID);
+    const index = authParts.indexOf('/');
+    if (index === -1) {
+      throw new Error('Invalid auth parts');
+    }
+
+    const userID = /** @type {import('./schema.js').UserID} */ (authParts.slice(0, index));
+    const sessionID = authParts.slice(index + 1);
+
+    return { userID, sessionID };
   }
 }
 
