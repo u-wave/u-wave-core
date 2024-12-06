@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
+import { RedisStore } from 'connect-redis';
 import qs from 'qs';
 import { pinoHttp } from 'pino-http';
 
@@ -122,44 +123,9 @@ async function httpApi(uw, options) {
         secure: uw.express.get('env') === 'production',
         httpOnly: true,
       },
-      store: new class extends session.Store {
-        /**
-         * @param {string} sid
-         * @param {(err?: Error, data?: session.SessionData | null) => void} callback
-         */
-        get(sid, callback) {
-          uw.redis.get(`session:${sid}`).then((data) => {
-            callback(undefined, data == null ? null : JSON.parse(data));
-          }, (err) => {
-            callback(err);
-          });
-        }
-
-        /**
-         * @param {string} sid
-         * @param {session.SessionData} data
-         * @param {(err?: Error) => void} callback
-         */
-        set(sid, data, callback) {
-          uw.redis.set(`session:${sid}`, JSON.stringify(data)).then(() => {
-            callback();
-          }, (err) => {
-            callback(err);
-          });
-        }
-
-        /**
-         * @param {string} sid
-         * @param {(err?: Error) => void} callback
-         */
-        destroy(sid, callback) {
-          uw.redis.del(`session:${sid}`).then(() => {
-            callback();
-          }, (err) => {
-            callback(err);
-          });
-        }
-      }(),
+      store: new RedisStore({
+        client: uw.redis,
+      }),
     }))
     .use(uw.passport.initialize())
     .use(addFullUrl())
