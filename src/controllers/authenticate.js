@@ -68,13 +68,12 @@ async function getAuthStrategies(req) {
 }
 
 /**
- * @param {import('express').Response} res
  * @param {import('../HttpApi.js').HttpApi} api
  * @param {import('../schema.js').User} user
  * @param {string} sessionID
  * @param {AuthenticateOptions & { session: 'cookie' | 'token' }} options
  */
-async function refreshSession(res, api, user, sessionID, options) {
+async function refreshSession(api, user, sessionID, options) {
   const token = jwt.sign(
     { id: user.id },
     options.secret,
@@ -84,13 +83,6 @@ async function refreshSession(res, api, user, sessionID, options) {
   const socketToken = await api.authRegistry.createAuthToken(user, sessionID);
 
   if (options.session === 'cookie') {
-    const serialized = cookie.serialize('uwsession', token, {
-      httpOnly: true,
-      secure: !!options.cookieSecure,
-      path: options.cookiePath ?? '/',
-      maxAge: seconds('31 days'),
-    });
-    res.setHeader('Set-Cookie', serialized);
     return { token: 'cookie', socketToken };
   }
 
@@ -104,9 +96,8 @@ async function refreshSession(res, api, user, sessionID, options) {
  * @typedef {object} LoginQuery
  * @prop {'cookie'|'token'} [session]
  * @param {import('../types.js').AuthenticatedRequest<{}, LoginQuery, {}> & WithAuthOptions} req
- * @param {import('express').Response} res
  */
-async function login(req, res) {
+async function login(req) {
   const options = req.authOptions;
   const { user } = req;
   const { session } = req.query;
@@ -118,7 +109,7 @@ async function login(req, res) {
     throw new BannedError();
   }
 
-  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
+  const { token, socketToken } = await refreshSession(req.uwaveHttp, user, req.sessionID, {
     ...options,
     session: sessionType,
   });
@@ -190,7 +181,7 @@ async function socialLoginCallback(service, req, res) {
     window.close();
   `;
 
-  await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
+  await refreshSession(req.uwaveHttp, user, req.sessionID, {
     ...req.authOptions,
     session: 'cookie',
   });
@@ -222,9 +213,8 @@ async function socialLoginCallback(service, req, res) {
  * @param {string} service
  * @param {import('../types.js').Request<{}, SocialLoginFinishQuery, SocialLoginFinishBody> &
  *         WithAuthOptions} req
- * @param {import('express').Response} res
  */
-async function socialLoginFinish(service, req, res) {
+async function socialLoginFinish(service, req) {
   const options = req.authOptions;
   const { pendingUser: user } = req;
   const sessionType = req.query.session === 'cookie' ? 'cookie' : 'token';
@@ -263,7 +253,7 @@ async function socialLoginFinish(service, req, res) {
 
   Object.assign(user, updates);
 
-  const { token, socketToken } = await refreshSession(res, req.uwaveHttp, user, req.sessionID, {
+  const { token, socketToken } = await refreshSession(req.uwaveHttp, user, req.sessionID, {
     ...options,
     session: sessionType,
   });
@@ -450,6 +440,7 @@ async function logout(req, res) {
     userID: user.id,
   });
 
+  // Clear the legacy `uwsession` cookie.
   if (cookies && cookies.uwsession) {
     const serialized = cookie.serialize('uwsession', '', {
       httpOnly: true,
