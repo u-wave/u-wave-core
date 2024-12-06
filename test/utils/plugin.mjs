@@ -20,9 +20,10 @@ async function testPlugin(uw) {
       .executeTakeFirstOrThrow();
   }
 
-  async function connectToWebSocketAs(user) {
+  async function connectToWebSocketAs(user, session) {
     const { port } = uw.server.address();
-    const token = await uw.socketServer.authRegistry.createAuthToken(user);
+
+    const token = await uw.socketServer.authRegistry.createAuthToken(user, session ?? randomUUID());
 
     const ws = new WebSocket(`ws://localhost:${port}`);
     await events.once(ws, 'open');
