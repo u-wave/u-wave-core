@@ -20,41 +20,32 @@ class LostConnection extends EventEmitter {
       ns: 'uwave:sockets', connectionType: 'LostConnection', userID: this.user.id, sessionID,
     });
 
-    this.initQueued();
+    this.#initQueued();
 
     this.#removeTimer = setTimeout(() => {
       this.close();
-      this.uw.redis.del(this.key, this.messagesKey);
+      this.uw.redis.del(this.#key, this.#messagesKey);
     }, timeout * 1000);
   }
 
-  /**
-   * @private
-   */
-  get key() {
+  get #key() {
     return `http-api:disconnected:${this.sessionID}`;
   }
 
-  /**
-   * @private
-   */
-  get messagesKey() {
+  get #messagesKey() {
     return `http-api:disconnected:${this.sessionID}:messages`;
   }
 
-  /**
-   * @private
-   */
-  initQueued() {
+  #initQueued() {
     // We expire the keys after timeout*10, because a server restart near the
     // end of the timeout might mean that someone fails to reconnect. This way
     // we can ensure that everyone still gets the full `timeout` duration to
     // reconnect after a server restart, while also not filling up Redis with
     // messages to users who left and will never return.
     this.uw.redis.multi()
-      .set(this.key, 'true', 'EX', this.timeout * 10)
-      .ltrim(this.messagesKey, 0, 0)
-      .expire(this.messagesKey, this.timeout * 10)
+      .set(this.#key, 'true', 'EX', this.timeout * 10)
+      .ltrim(this.#messagesKey, 0, 0)
+      .expire(this.#messagesKey, this.timeout * 10)
       .exec();
   }
 
@@ -66,7 +57,7 @@ class LostConnection extends EventEmitter {
     this.#logger.info({ command, data }, 'queue command');
 
     this.uw.redis.rpush(
-      this.messagesKey,
+      this.#messagesKey,
       JSON.stringify({ command, data }),
     );
   }
