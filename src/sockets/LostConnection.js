@@ -3,6 +3,8 @@ import EventEmitter from 'node:events';
 class LostConnection extends EventEmitter {
   #logger;
 
+  #removeTimer;
+
   /**
    * @param {import('../Uwave.js').default} uw
    * @param {import('../schema.js').User} user
@@ -19,7 +21,11 @@ class LostConnection extends EventEmitter {
     });
 
     this.initQueued();
-    this.setTimeout(timeout);
+
+    this.#removeTimer = setTimeout(() => {
+      this.close();
+      this.uw.redis.del(this.key, this.messagesKey);
+    }, timeout * 1000);
   }
 
   /**
@@ -53,17 +59,6 @@ class LostConnection extends EventEmitter {
   }
 
   /**
-   * @param {number} timeout
-   * @private
-   */
-  setTimeout(timeout) {
-    this.removeTimer = setTimeout(() => {
-      this.close();
-      this.uw.redis.del(this.key, this.messagesKey);
-    }, timeout * 1000);
-  }
-
-  /**
    * @param {string} command
    * @param {import('type-fest').JsonValue} data
    */
@@ -78,13 +73,13 @@ class LostConnection extends EventEmitter {
 
   close() {
     this.#logger.info('close');
-    this.emit('close');
+    queueMicrotask(() => {
+      this.emit('close');
+    });
   }
 
   removed() {
-    if (this.removeTimer) {
-      clearTimeout(this.removeTimer);
-    }
+    clearTimeout(this.#removeTimer);
   }
 
   toString() {

@@ -3,7 +3,6 @@ import lodash from 'lodash';
 import sjson from 'secure-json-parse';
 import { WebSocketServer } from 'ws';
 import Ajv from 'ajv';
-import ms from 'ms';
 import { stdSerializers } from 'pino';
 import { socketVote } from './controllers/booth.js';
 import { disconnectUser } from './controllers/users.js';
@@ -13,9 +12,12 @@ import AuthedConnection from './sockets/AuthedConnection.js';
 import LostConnection from './sockets/LostConnection.js';
 import { serializeUser } from './utils/serialize.js';
 
-const { debounce, isEmpty } = lodash;
+const { isEmpty } = lodash;
 
 export const REDIS_ACTIVE_SESSIONS = 'users';
+
+const PING_INTERVAL = 10_000;
+const GUEST_COUNT_INTERVAL = 2_000;
 
 /**
  * @typedef {import('./schema.js').User} User
@@ -102,10 +104,10 @@ class SocketServer {
 
   #pinger;
 
-  /**
-   * Update online guests count and broadcast an update if necessary.
-   */
-  #recountGuests;
+  /** Update online guests count and broadcast an update if necessary. */
+  #guestCountInterval;
+
+  #guestCountDirty = true;
 
   /**
    * Handlers for commands that come in from clients.
@@ -187,16 +189,17 @@ class SocketServer {
 
     this.#pinger = setInterval(() => {
       this.ping();
-    }, ms('10 seconds'));
+    }, PING_INTERVAL);
 
-    this.#recountGuests = debounce(() => {
-      if (this.#closing) {
+    this.#guestCountInterval = setInterval(() => {
+      if (!this.#guestCountDirty) {
         return;
       }
-      this.#recountGuestsInternal().catch((error) => {
+
+      this.#recountGuests().catch((error) => {
         this.#logger.error({ err: error }, 'counting guests failed');
       });
-    }, ms('2 seconds'));
+    }, GUEST_COUNT_INTERVAL);
 
     this.#clientActions = {
       sendChat: (user, message) => {
@@ -629,7 +632,7 @@ class SocketServer {
     this.#logger.trace({ type: connection.constructor.name, userID, sessionID }, 'add connection');
 
     this.#connections.push(connection);
-    this.#recountGuests();
+    this.#guestCountDirty = true;
   }
 
   /**
@@ -647,7 +650,7 @@ class SocketServer {
     this.#connections.splice(i, 1);
 
     connection.removed();
-    this.#recountGuests();
+    this.#guestCountDirty = true;
   }
 
   /**
@@ -703,11 +706,11 @@ class SocketServer {
     clearInterval(this.#pinger);
 
     this.#closing = true;
+    clearInterval(this.#guestCountInterval);
+
     for (const connection of this.#connections) {
       connection.close();
     }
-
-    this.#recountGuests.cancel();
 
     const closeWsServer = promisify(this.#wss.close.bind(this.#wss));
     await closeWsServer();
@@ -779,7 +782,7 @@ class SocketServer {
     return parseInt(rawCount, 10);
   }
 
-  async #recountGuestsInternal() {
+  async #recountGuests() {
     const { redis } = this.#uw;
     const guests = this.#connections
       .filter((connection) => connection instanceof GuestConnection)
