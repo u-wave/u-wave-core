@@ -1,8 +1,16 @@
 import EventEmitter from 'node:events';
 import Ultron from 'ultron';
+import WebSocket from 'ws';
+
+const PING_TIMEOUT = 5_000;
+const DEAD_TIMEOUT = 30_000;
 
 class GuestConnection extends EventEmitter {
+  #events;
+
   #logger;
+
+  #lastMessage = Date.now();
 
   /**
    * @param {import('../Uwave.js').default} uw
@@ -16,13 +24,13 @@ class GuestConnection extends EventEmitter {
     this.options = options;
     this.#logger = uw.logger.child({ ns: 'uwave:sockets', connectionType: 'GuestConnection', userId: null });
 
-    this.events = new Ultron(socket);
+    this.#events = new Ultron(socket);
 
-    this.events.on('close', () => {
+    this.#events.on('close', () => {
       this.emit('close');
     });
 
-    this.events.on('message', /** @param {string|Buffer} token */ (token) => {
+    this.#events.on('message', /** @param {string|Buffer} token */ (token) => {
       this.attemptAuth(token.toString()).then(() => {
         this.send('authenticated');
       }).catch((error) => {
@@ -30,7 +38,9 @@ class GuestConnection extends EventEmitter {
       });
     });
 
-    this.lastMessage = Date.now();
+    this.#events.on('pong', () => {
+      this.#lastMessage = Date.now();
+    });
   }
 
   /**
@@ -73,13 +83,22 @@ class GuestConnection extends EventEmitter {
    */
   send(command, data) {
     this.socket.send(JSON.stringify({ command, data }));
-    this.lastMessage = Date.now();
+  }
+
+  #timeSinceLastMessage() {
+    return Date.now() - this.#lastMessage;
   }
 
   ping() {
-    if (Date.now() - this.lastMessage > 5000) {
-      this.socket.send('-');
-      this.lastMessage = Date.now();
+    if (this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (this.#timeSinceLastMessage() > DEAD_TIMEOUT) {
+      this.socket.terminate();
+      return;
+    }
+    if (this.#timeSinceLastMessage() > PING_TIMEOUT) {
+      this.socket.ping();
     }
   }
 
@@ -89,7 +108,7 @@ class GuestConnection extends EventEmitter {
   }
 
   removed() {
-    this.events.remove();
+    this.#events.remove();
   }
 
   toString() {

@@ -3,8 +3,15 @@ import Ultron from 'ultron';
 import WebSocket from 'ws';
 import sjson from 'secure-json-parse';
 
+const PING_TIMEOUT = 5_000;
+const DEAD_TIMEOUT = 30_000;
+
 class AuthedConnection extends EventEmitter {
+  #events;
+
   #logger;
+
+  #lastMessage = Date.now();
 
   /**
    * @param {import('../Uwave.js').default} uw
@@ -16,19 +23,23 @@ class AuthedConnection extends EventEmitter {
     super();
     this.uw = uw;
     this.socket = socket;
-    this.events = new Ultron(this.socket);
+    this.#events = new Ultron(this.socket);
     this.user = user;
     this.sessionID = sessionID;
     this.#logger = uw.logger.child({
       ns: 'uwave:sockets', connectionType: 'AuthedConnection', userId: this.user.id, sessionID,
     });
 
-    this.events.on('close', () => {
+    this.#events.on('close', () => {
       this.emit('close', { banned: this.banned });
     });
-    this.events.on('message', this.onMessage.bind(this));
+    this.#events.on('message', (raw) => {
+      this.#onMessage(raw);
+    });
+    this.#events.on('pong', () => {
+      this.#onPong();
+    });
 
-    this.lastMessage = Date.now();
     this.sendWaiting();
   }
 
@@ -66,13 +77,17 @@ class AuthedConnection extends EventEmitter {
 
   /**
    * @param {string|Buffer} raw
-   * @private
    */
-  onMessage(raw) {
+  #onMessage(raw) {
+    this.#lastMessage = Date.now();
     const { command, data } = sjson.safeParse(raw) ?? {};
     if (command) {
       this.emit('command', command, data);
     }
+  }
+
+  #onPong() {
+    this.#lastMessage = Date.now();
   }
 
   /**
@@ -81,13 +96,23 @@ class AuthedConnection extends EventEmitter {
    */
   send(command, data) {
     this.socket.send(JSON.stringify({ command, data }));
-    this.lastMessage = Date.now();
+    this.#lastMessage = Date.now();
+  }
+
+  #timeSinceLastMessage() {
+    return Date.now() - this.#lastMessage;
   }
 
   ping() {
-    if (Date.now() - this.lastMessage > 5000 && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send('-');
-      this.lastMessage = Date.now();
+    if (this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (this.#timeSinceLastMessage() > DEAD_TIMEOUT) {
+      this.socket.terminate();
+      return;
+    }
+    if (this.#timeSinceLastMessage() > PING_TIMEOUT) {
+      this.socket.ping();
     }
   }
 
@@ -104,7 +129,7 @@ class AuthedConnection extends EventEmitter {
   }
 
   removed() {
-    this.events.remove();
+    this.#events.remove();
   }
 
   toString() {
