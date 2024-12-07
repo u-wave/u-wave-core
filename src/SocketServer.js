@@ -703,7 +703,7 @@ class SocketServer {
     clearInterval(this.#pinger);
 
     this.#closing = true;
-    for (const connection of this.#wss.clients) {
+    for (const connection of this.#connections) {
       connection.close();
     }
 
