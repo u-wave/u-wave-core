@@ -720,7 +720,7 @@ class SocketServer {
   /**
    * Get the connection instance for a specific user.
    *
-   * @param {User|string} user The user.
+   * @param {User|import('./schema.js').UserID} user The user.
    * @returns {Connection|undefined}
    */
   connection(user) {
@@ -730,9 +730,7 @@ class SocketServer {
 
   ping() {
     this.#connections.forEach((connection) => {
-      if ('socket' in connection) {
-        connection.ping();
-      }
+      connection.ping();
     });
   }
 
