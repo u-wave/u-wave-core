@@ -493,7 +493,7 @@ class Booth {
     const result = this.#locker.using(
       [REDIS_ADVANCING],
       10_000,
-      (signal) => this.#advanceLocked({ ...opts, signal }),
+      (signal) => this.#uw.db.transaction().execute(async (tx) => this.#advanceLocked({ ...opts, signal }, tx)),
     );
     this.#awaitAdvance = result;
     return result;

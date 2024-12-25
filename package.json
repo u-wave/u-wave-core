@@ -42,6 +42,7 @@
     "explain-error": "^1.0.4",
     "express": "^5.0.0",
     "express-session": "^1.18.1",
+    "generic-pool": "^3.9.0",
     "has": "^1.0.3",
     "helmet": "^8.0.0",
     "htmlescape": "^1.1.1",

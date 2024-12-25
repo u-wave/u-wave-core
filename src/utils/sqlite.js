@@ -1,4 +1,6 @@
 import lodash from 'lodash';
+import * as ky from 'kysely';
+import { createPool } from 'generic-pool';
 import { sql, OperationNodeTransformer } from 'kysely';
 
 /**
@@ -235,4 +237,188 @@ export async function connect(path) {
  */
 export function isForeignKeyError(err) {
   return err instanceof Error && 'code' in err && err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY';
+}
+
+/**
+ * @typedef {{
+ *   database: () => Promise<import('better-sqlite3').Database>,
+ *   logger?: import('pino').Logger,
+ * }} SqliteDialectConfig */
+
+/** @implements {ky.Dialect} */
+export class SqliteDialect {
+  #config;
+
+  /** @param {SqliteDialectConfig} config */
+  constructor(config) {
+    this.#config = config;
+  }
+
+  createAdapter() {
+    return new ky.SqliteAdapter()
+  }
+
+  createQueryCompiler() {
+    return new ky.SqliteQueryCompiler()
+  }
+
+  /** @param {ky.Kysely<unknown>} db */
+  createIntrospector(db) {
+    return new ky.SqliteIntrospector(db)
+  }
+
+  createDriver() {
+    return new SqliteDriver(this.#config);
+  }
+}
+/** @implements {ky.Driver} */
+export class SqliteDriver {
+  #config;
+  #pool;
+
+  /** @param {SqliteDialectConfig} config */
+  constructor(config) {
+    this.#config = config;
+    this.#pool = createPool({
+      create: async () => new SqliteConnection(await this.#config.database()),
+      destroy: async (db) => {
+        db.release();
+      },
+    }, {
+      min: 1,
+      max: 8,
+    });
+  }
+
+  async init() {
+    await this.#pool.ready();
+  }
+
+  async acquireConnection () {
+    this.#config.logger?.debug({
+      size: this.#pool.size,
+      available: this.#pool.available,
+      borrowed: this.#pool.borrowed,
+    }, 'acquire connection');
+
+    const connection = await this.#pool.acquire();
+    return connection;
+  }
+
+  /** @param {SqliteConnection} connection */
+  async releaseConnection(connection) {
+    this.#config.logger?.debug({
+      size: this.#pool.size,
+      available: this.#pool.available,
+      borrowed: this.#pool.borrowed,
+    }, 'release connection');
+
+    await this.#pool.release(connection);
+  }
+
+  /** @param {SqliteConnection} connection */
+  async beginTransaction(connection) {
+    connection._beginTransaction();
+  }
+
+  /** @param {SqliteConnection} connection */
+  async commitTransaction(connection) {
+    connection._commitTransaction();
+  }
+
+  /** @param {SqliteConnection} connection */
+  async rollbackTransaction(connection) {
+    connection._rollbackTransaction();
+  }
+
+  async destroy() {
+    await this.#pool.drain();
+    await this.#pool.clear();
+  }
+}
+
+/** @implements {ky.DatabaseConnection} */
+class SqliteConnection {
+  #db;
+  /** @type {null | { stmt: import('better-sqlite3').Statement, sql: string }} */
+  #cache = null;
+
+  /** @param {import('better-sqlite3').Database} db */
+  constructor(db) {
+    this.#db = db;
+  }
+
+  release() {
+    this.#db.close();
+  }
+
+  _beginTransaction() {
+    this.#db.exec('BEGIN IMMEDIATE');
+  }
+
+  _commitTransaction() {
+    this.#db.exec('COMMIT');
+  }
+
+  _rollbackTransaction() {
+    this.#db.exec('ROLLBACK');
+  }
+
+  /** @param {string} sql */
+  #prepare(sql) {
+    if (this.#cache != null && this.#cache.sql === sql) {
+      return this.#cache.stmt;
+    }
+    const stmt = this.#db.prepare(sql);
+    this.#cache = { sql, stmt };
+    return stmt;
+  }
+
+  /**
+   * @template O
+   * @param {ky.CompiledQuery<unknown>} compiledQuery
+   * @returns {Promise<ky.QueryResult<O>>}
+   */
+  async executeQuery(compiledQuery) {
+    const stmt = this.#prepare(compiledQuery.sql);
+
+    if (stmt.reader) {
+      return {
+        rows: /** @type {O[]} */ (stmt.all(compiledQuery.parameters)),
+      };
+    }
+
+    const { changes, lastInsertRowid } = stmt.run(compiledQuery.parameters);
+    return {
+      numUpdatedOrDeletedRows: changes != null ? BigInt(changes) : undefined,
+      numAffectedRows: changes != null ? BigInt(changes) : undefined,
+      insertId: lastInsertRowid != null ? BigInt(lastInsertRowid) : undefined,
+      rows: [],
+    };
+  }
+
+  /**
+   * @template O
+   * @param {ky.CompiledQuery<unknown>} compiledQuery
+   * @param {number} chunkSize
+   * @returns {AsyncIterableIterator<ky.QueryResult<O>>}
+   */
+  async* streamQuery(compiledQuery, chunkSize) {
+    const stmt = this.#prepare(compiledQuery.sql);
+    if (!stmt.reader) {
+      throw new Error('only SELECT queries can be streamed');
+    }
+
+    let chunk = [];
+    for (const row of stmt.iterate(compiledQuery.parameters)) {
+      chunk.push(/** @type {O} */ (row));
+      if (chunk.length >= chunkSize) {
+        yield { rows: chunk };
+        chunk = [];
+      }
+    }
+    if (chunk.length > 0) {
+      yield { rows: chunk };
+    }
+  }
 }
